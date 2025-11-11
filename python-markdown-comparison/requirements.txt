@@ -1,0 +1,5 @@
+markdown
+mistune
+markdown-it-py
+cmarkgfm
+matplotlib
