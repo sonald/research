@@ -1,0 +1,28 @@
+width: 256
+height: 256
+path: "zzsi/afhq64_16k"
+from_disk: true
+data_dir: "data"
+
+# Data loader
+num_workers: 0
+
+# Model
+latent_features: 16
+intermediate_features: [32, 64, 128]
+
+# Training
+batch_size: 8
+learning_rate: 0.0001
+lambda_ssim: 0.2
+lambda_rec: 1.0
+lambda_kl: 0.00001
+splits:
+  - "train"
+num_epochs: 1
+seed: 42
+
+# Checkpoints
+output_name: "my_weights"
+load_pretrained_weights: false
+pretrained_weights_path: ""
