@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Autoresearch"
+  short_description: "Run benchmark-driven experiment loops with keep/discard logging"
+  default_prompt: "Use $codex-autoresearch to set up a persisted autoresearch loop, run the baseline, and keep only metric-improving changes."
