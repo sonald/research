@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssd-impl"
+version = "0.1.0"
+description = "Portable single-machine reproduction of simple self-distillation for code generation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "accelerate>=1.2.0",
+  "datasets>=3.2.0",
+  "numpy>=1.26.0",
+  "peft>=0.14.0",
+  "pyyaml>=6.0.0",
+  "torch>=2.3.0",
+  "transformers>=4.46.0",
+  "tqdm>=4.66.0",
+  "pytest>=8.0.0",
+]
+
+[project.scripts]
+ssd-prepare-prompts = "ssd_impl.prompts:main"
+ssd-synthesize = "ssd_impl.synthesize:main"
+ssd-train = "ssd_impl.train:main"
+ssd-merge-adapter = "ssd_impl.merge:main"
+ssd-sample = "ssd_impl.sample:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+

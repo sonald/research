@@ -1,0 +1,98 @@
+project_root: ..
+model:
+  name_or_path: Qwen/Qwen3-4B-Instruct-2507
+  trust_remote_code: false
+  dtype: auto
+
+dataset:
+  name: microsoft/rStar-Coder
+  subset: seed_sft
+  split: train
+  cache_dir: null
+
+paths:
+  prompts_path: artifacts/prompts/prompts.jsonl
+  synth_train_path: artifacts/synth/train.jsonl
+  synth_rejected_path: artifacts/synth/rejected.jsonl
+  checkpoints_dir: artifacts/checkpoints
+  merged_model_dir: artifacts/merged
+  sample_output_dir: artifacts/samples
+
+prompting:
+  system_prompt: 请给出 Python 解法，并把最终答案放进单个 markdown code block
+
+synthesis:
+  batch_size: 2
+  max_records: null
+  decode:
+    backend: auto
+    temperature: 1.6
+    top_k: 20
+    top_p: 0.8
+    max_new_tokens: 4096
+    max_model_len: 131072
+    n: 1
+    seed: 1234
+
+filtering:
+  reject_empty_completion: true
+  reject_empty_code_block: true
+  reject_single_line_stub: true
+  single_line_stub_max_chars: 120
+
+training:
+  per_device_batch_size: 1
+  gradient_accumulation_steps: 32
+  max_steps: 2500
+  warmup_steps: 250
+  learning_rate: 2.0e-4
+  weight_decay: 0.0
+  beta1: 0.9
+  beta2: 0.95
+  lr_scheduler_type: cosine
+  max_seq_len: 8192
+  save_every_steps: 250
+  log_every_steps: 10
+  num_workers: 0
+  seed: 1234
+  resume_from: null
+  gradient_checkpointing: true
+  max_grad_norm: 1.0
+  adapter:
+    type: lora
+    r: 64
+    alpha: 128
+    dropout: 0.05
+    target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
+
+sample:
+  batch_size: 1
+  max_records: null
+  preset: post_ssd
+  presets:
+    post_ssd:
+      backend: auto
+      temperature: 1.1
+      top_k: 20
+      top_p: 0.8
+      max_new_tokens: 4096
+      max_model_len: 131072
+      n: 1
+      seed: 1234
+    frozen:
+      backend: auto
+      temperature: 0.7
+      top_k: 20
+      top_p: 0.8
+      max_new_tokens: 4096
+      max_model_len: 131072
+      n: 1
+      seed: 1234
+

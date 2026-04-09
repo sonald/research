@@ -1,0 +1,6 @@
+extends: qwen3_4b_instruct_portable.yaml
+training:
+  learning_rate: 1.0e-5
+  weight_decay: 0.1
+  max_seq_len: 65536
+
