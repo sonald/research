@@ -273,6 +273,12 @@ class StreamingTrainer:
         self.compute_dtype = config.training.resolve_compute_dtype(self.device)
         self.master_dtype = config.training.resolve_master_dtype()
 
+        if config.model.dropout != 0.0:
+            raise NotImplementedError(
+                "The teaching runtime currently requires dropout=0. "
+                "Block-wise recompute would need RNG state capture/restoration to be correct."
+            )
+
         if config.model.tie_word_embeddings:
             raise NotImplementedError(
                 "The teaching runtime keeps embedding and lm_head as separate working copies; "
@@ -304,10 +310,14 @@ class StreamingTrainer:
         self.optimizer.zero_grad(set_to_none=True)
         if self.device.type == "cuda":
             torch.cuda.reset_peak_memory_stats(self.device)
+            start_event = torch.cuda.Event(enable_timing=True)
+            end_event = torch.cuda.Event(enable_timing=True)
+            start_event.record()
+        else:
+            start_time = time.perf_counter()
 
         input_ids = batch["input_ids"].to(self.device)
         labels = batch["labels"].to(self.device)
-        start_time = time.perf_counter()
 
         embedding = _materialize_module(self.model.embeddings, self.device, self.compute_dtype)
         final_norm = _materialize_module(self.model.final_norm, self.device, self.compute_dtype)
@@ -329,7 +339,12 @@ class StreamingTrainer:
         grad_norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.grad_clip)
         self.optimizer.step()
 
-        step_time = time.perf_counter() - start_time
+        if self.device.type == "cuda":
+            end_event.record()
+            end_event.synchronize()
+            step_time = start_event.elapsed_time(end_event) / 1000.0
+        else:
+            step_time = time.perf_counter() - start_time
         return StepMetrics(
             loss=loss.item(),
             grad_norm=float(grad_norm),

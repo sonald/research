@@ -16,6 +16,11 @@
 3. 不做 MoE、混合注意力、VLM、C++/CUDA extension
 4. 不追求真正的 pinned slab 池与生产级三流调度
 
+为了避免得出错误结论，这个版本还显式约束了两件事：
+
+1. 训练时 `dropout` 必须保持为 `0.0`，因为当前教学版还没有实现重算所需的 RNG 状态保存/恢复
+2. 默认把组输入 checkpoint 保留在设备侧，而不是额外搬回 CPU
+
 换句话说，这个目录更像“把论文的系统思想翻译成能读懂的 PyTorch 教材”，而不是原始 MegaTrain 仓库的精简拷贝。
 
 ## 目录
@@ -69,7 +74,7 @@ mini-megatrain/
 2. 下一层的工作副本会被提前放到一个 prefetch stream 上构造
 3. 真正使用下一层前，再让默认 stream 等待 prefetch stream
 
-由于 Python `deepcopy()` 和模块构造本身也在 host 侧运行，这个版本的重叠效果不可能接近论文实现，但代码结构已经保留了那条关键控制流。
+由于 Python `deepcopy()` 和模块构造本身也在 host 侧运行，这个版本的重叠效果不可能接近论文实现，但代码结构已经保留了那条关键控制流。它仍然不是论文里的 stateless template / flat-buffer pipeline。
 
 ## 快速开始
 
@@ -126,6 +131,8 @@ PYTHONPATH=src python -m mini_megatrain.train --config configs/demo_1b.yaml
 3. 1B 配置是否能跑通，仍取决于你的 GPU 显存、PCIe/NVLink 带宽和 CPU 内存
 4. 这个版本没有做 checkpoint save/resume
 5. 这个版本没有做生产级 pinned slab pool、flat tensor packing 和 stateless CUDA templates
+6. 这个版本没有实现 `gradient_accumulation_steps`，每个 `train_step` 都会更新一次参数
+7. 这个版本不是原仓库的 SFT/chat-template 数据路径，而是离线随机 token 系统验证路径
 
 ## 为什么它仍然有价值
 

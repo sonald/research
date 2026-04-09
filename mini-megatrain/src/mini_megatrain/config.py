@@ -86,8 +86,8 @@ class TrainingConfig:
     device: str = "auto"
     log_interval: int = 1
     seed: int = 42
-    save_group_inputs_on_cpu: bool = True
-    pin_group_inputs: bool = True
+    save_group_inputs_on_cpu: bool = False
+    pin_group_inputs: bool = False
     use_double_buffer: bool = True
 
     def __post_init__(self) -> None:

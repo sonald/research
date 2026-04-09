@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 
+import pytest
 import torch
 
 from mini_megatrain.config import Config, DataConfig, ModelConfig, TrainingConfig
@@ -49,7 +50,7 @@ def test_streaming_step_matches_dense_training_on_tiny_model() -> None:
         device="cpu",
         log_interval=1,
         seed=0,
-        save_group_inputs_on_cpu=True,
+        save_group_inputs_on_cpu=False,
         pin_group_inputs=False,
         use_double_buffer=False,
     )
@@ -73,3 +74,30 @@ def test_streaming_step_matches_dense_training_on_tiny_model() -> None:
     assert abs(streaming_metrics.loss - dense_loss) < 1e-5
     for name, dense_tensor in dense_state.items():
         assert torch.allclose(streaming_state[name], dense_tensor, atol=1e-5), name
+
+
+def test_nonzero_dropout_is_rejected_until_rng_checkpointing_exists() -> None:
+    config = Config(
+        model=ModelConfig(
+            vocab_size=128,
+            hidden_size=32,
+            num_layers=2,
+            num_heads=4,
+            mlp_hidden_size=64,
+            max_seq_len=16,
+            dropout=0.1,
+        ),
+        data=DataConfig(),
+        training=TrainingConfig(
+            batch_size=1,
+            seq_len=16,
+            total_steps=1,
+            device="cpu",
+            save_group_inputs_on_cpu=False,
+            pin_group_inputs=False,
+            use_double_buffer=False,
+        ),
+    )
+
+    with pytest.raises(NotImplementedError, match="dropout=0"):
+        StreamingTrainer(config)

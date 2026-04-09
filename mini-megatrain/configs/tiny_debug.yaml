@@ -26,6 +26,6 @@ training:
   device: cpu
   log_interval: 1
   seed: 123
-  save_group_inputs_on_cpu: true
+  save_group_inputs_on_cpu: false
   pin_group_inputs: false
   use_double_buffer: false
