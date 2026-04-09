@@ -1,0 +1,31 @@
+model:
+  vocab_size: 256
+  hidden_size: 64
+  num_layers: 4
+  num_heads: 4
+  mlp_hidden_size: 256
+  max_seq_len: 64
+  dropout: 0.0
+  tie_word_embeddings: false
+
+data:
+  dataset_kind: random
+  num_batches: 16
+  base_seed: 7
+
+training:
+  batch_size: 2
+  seq_len: 32
+  total_steps: 4
+  learning_rate: 1.0e-3
+  weight_decay: 0.0
+  grad_clip: 1.0
+  checkpoint_group_size: 2
+  compute_dtype: float32
+  master_dtype: float32
+  device: cpu
+  log_interval: 1
+  seed: 123
+  save_group_inputs_on_cpu: true
+  pin_group_inputs: false
+  use_double_buffer: false
