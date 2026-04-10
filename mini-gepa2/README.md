@@ -104,6 +104,13 @@ cd /Users/siancao/work/ai/research/mini-gepa2
 PYTHONPATH=src python -m mini_gepa2.demo
 ```
 
+Run the minimal API usage example:
+
+```bash
+cd /Users/siancao/work/ai/research/mini-gepa2
+PYTHONPATH=src python examples/basic_usage.py
+```
+
 Run the tests:
 
 ```bash
@@ -134,3 +141,6 @@ The demo is intentionally tiny and deterministic:
 
 This is obviously much simpler than a real LLM system, but it makes the GEPA control flow
 fully visible and easy to test.
+
+If you want the shortest possible "how do I call the API?" example, see
+`examples/basic_usage.py`.
