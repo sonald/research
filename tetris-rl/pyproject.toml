@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tetris-rl"
+version = "0.1.0"
+description = "Teaching-oriented Tetris reinforcement learning baselines with DQN and A2C"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "gymnasium>=0.29.0",
+  "numpy>=1.24.0",
+  "pillow>=10.0.0",
+  "pyyaml>=6.0.0",
+  "torch>=2.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[project.scripts]
+train-dqn = "tetris_rl.train_dqn:main"
+train-a2c = "tetris_rl.train_a2c:main"
+evaluate-policy = "tetris_rl.evaluate_policy:main"
+demo-policy = "tetris_rl.demo_policy:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
