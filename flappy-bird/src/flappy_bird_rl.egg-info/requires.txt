@@ -1,0 +1,13 @@
+numpy>=1.24.0
+pyyaml>=6.0.0
+
+[dev]
+pytest>=8.0.0
+
+[play]
+pygame>=2.5.0
+
+[rl]
+gymnasium>=0.29.0
+pillow>=10.0.0
+torch>=2.3.0

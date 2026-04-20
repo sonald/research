@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flappy-bird-rl"
+version = "0.1.0"
+description = "Playable Flappy Bird clone with Gymnasium-compatible RL baselines"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24.0",
+  "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+play = [
+  "pygame>=2.5.0",
+]
+rl = [
+  "gymnasium>=0.29.0",
+  "pillow>=10.0.0",
+  "torch>=2.3.0",
+]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[project.scripts]
+train-flappy-dqn = "flappy_bird_rl.train_dqn:main"
+train-flappy-a2c = "flappy_bird_rl.train_a2c:main"
+evaluate-flappy-policy = "flappy_bird_rl.evaluate_policy:main"
+demo-flappy-policy = "flappy_bird_rl.demo_policy:main"
+play-flappy = "flappy_bird_rl.play:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

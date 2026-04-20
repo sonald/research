@@ -1,0 +1,14 @@
+env:
+  max_episode_steps: 300
+train:
+  seed: 11
+  total_steps: 2048
+  log_interval: 256
+  checkpoint_interval: 1024
+  output_dir: outputs/debug_a2c
+  eval_episodes: 3
+a2c:
+  learning_rate: 0.0007
+  num_envs: 4
+  n_steps: 8
+  hidden_dim: 128
