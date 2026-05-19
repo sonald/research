@@ -1,6 +1,0 @@
-[console_scripts]
-demo-flappy-policy = flappy_bird_rl.demo_policy:main
-evaluate-flappy-policy = flappy_bird_rl.evaluate_policy:main
-play-flappy = flappy_bird_rl.play:main
-train-flappy-a2c = flappy_bird_rl.train_a2c:main
-train-flappy-dqn = flappy_bird_rl.train_dqn:main
