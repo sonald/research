@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GEPA 官方实现：论文设计到代码主干映射</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #16201d;
+      --muted: #60706a;
+      --paper: #f7f4ec;
+      --panel: #fffdf7;
+      --line: #d9d2c3;
+      --soft: #ede7d9;
+      --code: #16231f;
+      --green: #2f6f5e;
+      --blue: #2d5f8b;
+      --red: #9a4a42;
+      --gold: #a66f22;
+      --shadow: 0 18px 55px rgba(36, 31, 24, 0.13);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(247, 244, 236, 0.92), rgba(247, 244, 236, 1)),
+        repeating-linear-gradient(90deg, transparent 0, transparent 36px, rgba(22, 32, 29, 0.035) 37px);
+      line-height: 1.6;
+    }
+
+    a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+    .page {
+      width: min(1180px, calc(100vw - 36px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+    }
+
+    header {
+      min-height: 86vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.82fr);
+      gap: 36px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(42px, 6vw, 86px);
+      line-height: 0.98;
+      letter-spacing: 0;
+      max-width: 860px;
+    }
+
+    .lead {
+      margin: 24px 0 0;
+      max-width: 760px;
+      font-size: 20px;
+      color: #33413d;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 247, 0.72);
+      color: #34423e;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .hero-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+
+    .hero-panel h2,
+    section h2 {
+      margin: 0 0 14px;
+      font-size: 25px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .flow {
+      width: 100%;
+      aspect-ratio: 1.18;
+      display: block;
+      border: 1px solid var(--line);
+      background: #fbfaf5;
+    }
+
+    .flow .pulse {
+      animation: pulse 2.8s ease-in-out infinite;
+      transform-origin: center;
+    }
+
+    .flow .token {
+      animation: travel 7s cubic-bezier(.55, .04, .2, .98) infinite;
+    }
+
+    .flow .token.two { animation-delay: 1.2s; }
+    .flow .token.three { animation-delay: 2.4s; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.42; transform: scale(1); }
+      50% { opacity: 0.9; transform: scale(1.05); }
+    }
+
+    @keyframes travel {
+      0% { offset-distance: 0%; opacity: 0; }
+      8% { opacity: 1; }
+      84% { opacity: 1; }
+      100% { offset-distance: 100%; opacity: 0; }
+    }
+
+    .section {
+      padding: 56px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .summary {
+      min-height: 168px;
+      padding: 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+    }
+
+    .summary strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 15px;
+      color: #1f2c28;
+    }
+
+    .summary p { margin: 0; color: var(--muted); }
+
+    .map {
+      display: grid;
+      grid-template-columns: 230px minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    .rail {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      padding: 16px;
+      background: rgba(255, 253, 247, 0.82);
+      border: 1px solid var(--line);
+    }
+
+    .rail a {
+      display: block;
+      padding: 8px 0;
+      color: #33413d;
+      font-size: 14px;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(217, 210, 195, 0.72);
+    }
+
+    .code-card {
+      margin-bottom: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 30px rgba(36, 31, 24, 0.07);
+      overflow: hidden;
+    }
+
+    .code-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #f3eedf;
+    }
+
+    .code-head h3 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .paper-note {
+      max-width: 410px;
+      color: #4e5d57;
+      font-size: 14px;
+    }
+
+    .code-grid {
+      display: grid;
+      grid-template-columns: 62px minmax(0, 1fr) 300px;
+      border-top: 1px solid rgba(217, 210, 195, 0.5);
+    }
+
+    .ln,
+    .src,
+    .note {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(217, 210, 195, 0.6);
+    }
+
+    .ln {
+      text-align: right;
+      color: #7c887f;
+      background: #f8f5ed;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      user-select: none;
+    }
+
+    .src {
+      overflow-x: hidden;
+      color: var(--code);
+      background: #fffdf8;
+      font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .note {
+      color: #3f4d48;
+      background: #faf7ef;
+      font-size: 13px;
+      border-left: 1px solid var(--line);
+    }
+
+    .note b {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--green);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .k { color: #7b3f75; font-weight: 700; }
+    .s { color: #8a5a12; }
+    .c { color: #6b756f; font-style: italic; }
+    .f { color: #245f8f; }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .legend div {
+      min-height: 84px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .legend span {
+      display: block;
+      font-size: 12px;
+      font-weight: 750;
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    footer {
+      padding: 34px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 920px) {
+      header,
+      .map,
+      .summary-grid,
+      .legend {
+        grid-template-columns: 1fr;
+      }
+
+      header { min-height: auto; padding: 44px 0; }
+      .rail { position: static; }
+
+      .code-head {
+        display: block;
+      }
+
+      .paper-note {
+        max-width: none;
+        margin-top: 10px;
+      }
+
+      .code-grid {
+        grid-template-columns: 48px minmax(0, 1fr);
+      }
+
+      .note {
+        grid-column: 1 / -1;
+        border-left: 0;
+        border-bottom-color: var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <h1>GEPA 官方实现：论文设计到代码主干映射</h1>
+        <p class="lead">
+          这是一张源码导览图：把论文中的“从轨迹中反思、在 Pareto 前沿上演化、必要时合并互补候选”对应到
+          `gepa-ai/gepa` 当前官方实现的核心文件、函数和状态字段。
+        </p>
+        <div class="meta">
+          <span class="chip">arXiv v2: 2026-02-14</span>
+          <span class="chip">官方仓库快照: 5910c64</span>
+          <span class="chip">主线: src/gepa</span>
+          <span class="chip">用途: 教学式源码阅读</span>
+        </div>
+      </div>
+      <aside class="hero-panel">
+        <h2>算法心跳</h2>
+        <svg class="flow" viewBox="0 0 520 440" role="img" aria-label="GEPA select execute reflect mutate accept merge flow">
+          <defs>
+            <path id="loopPath" d="M94 100 C184 24 350 34 420 116 C488 196 446 326 334 352 C204 382 76 302 76 190 C76 152 82 122 94 100" fill="none"/>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="#2f6f5e"/>
+            </marker>
+          </defs>
+          <rect x="28" y="28" width="464" height="384" fill="#fffdf7" stroke="#d9d2c3"/>
+          <path d="M94 100 C184 24 350 34 420 116 C488 196 446 326 334 352 C204 382 76 302 76 190 C76 152 82 122 94 100"
+            fill="none" stroke="#2f6f5e" stroke-width="4" marker-end="url(#arrow)" opacity=".86"/>
+          <g font-family="ui-sans-serif, system-ui" font-size="15" font-weight="700" fill="#16201d">
+            <g class="pulse"><circle cx="94" cy="100" r="38" fill="#dcebe4" stroke="#2f6f5e"/><text x="72" y="105">Select</text></g>
+            <g><circle cx="420" cy="116" r="38" fill="#e8edf5" stroke="#2d5f8b"/><text x="396" y="121">Trace</text></g>
+            <g><circle cx="424" cy="276" r="42" fill="#f2e7d2" stroke="#a66f22"/><text x="394" y="281">Reflect</text></g>
+            <g><circle cx="256" cy="362" r="40" fill="#f5e2df" stroke="#9a4a42"/><text x="230" y="367">Mutate</text></g>
+            <g><circle cx="76" cy="218" r="42" fill="#e4ece8" stroke="#2f6f5e"/><text x="50" y="223">Accept</text></g>
+          </g>
+          <circle class="token" r="7" fill="#2f6f5e" style="offset-path: path('M94 100 C184 24 350 34 420 116 C488 196 446 326 334 352 C204 382 76 302 76 190 C76 152 82 122 94 100');"/>
+          <circle class="token two" r="7" fill="#2d5f8b" style="offset-path: path('M94 100 C184 24 350 34 420 116 C488 196 446 326 334 352 C204 382 76 302 76 190 C76 152 82 122 94 100');"/>
+          <circle class="token three" r="7" fill="#a66f22" style="offset-path: path('M94 100 C184 24 350 34 420 116 C488 196 446 326 334 352 C204 382 76 302 76 190 C76 152 82 122 94 100');"/>
+          <path d="M152 82 L250 168 L352 92" fill="none" stroke="#9a4a42" stroke-width="2" stroke-dasharray="6 6"/>
+          <text x="176" y="172" font-family="ui-sans-serif, system-ui" font-size="13" fill="#60706a">merge: combine complementary descendants</text>
+        </svg>
+      </aside>
+    </header>
+
+    <section class="section">
+      <h2>论文设计的四个落点</h2>
+      <div class="summary-grid">
+        <article class="summary">
+          <strong>自然语言反思不是奖励标量的替代品，而是学习介质。</strong>
+          <p>论文强调从 reasoning、tool calls、tool outputs 等轨迹中诊断失败原因。代码中这落在 adapter 的 trace 捕获和 reflective dataset 构造。</p>
+        </article>
+        <article class="summary">
+          <strong>Pareto 前沿不是一个分数榜，而是一组“局部擅长者”。</strong>
+          <p>官方实现按验证样本、目标或二者组合维护 frontier，使某些候选即使平均分不最高，也能成为父代。</p>
+        </article>
+        <article class="summary">
+          <strong>变异先在 minibatch 上试探，再进入全验证更新。</strong>
+          <p>反思 proposer 先比较 parent 与 child 的 minibatch 分数；通过 acceptance 后，engine 才把候选加入池并更新 Pareto 状态。</p>
+        </article>
+        <article class="summary">
+          <strong>合并不是平均两个 prompt，而是沿共同祖先做结构化拼接。</strong>
+          <p>官方 merge proposer 会寻找共享祖先的 Pareto 候选对，逐组件判断互补改动，再用验证子集决定是否值得全量评估。</p>
+        </article>
+      </div>
+      <div class="legend">
+        <div><span>Candidate</span>命名文本组件的映射，如 system prompt、agent policy、代码片段。</div>
+        <div><span>Trajectory</span>执行过程证据。GEPA 核心不解释它，由 adapter 转成反思数据。</div>
+        <div><span>ASI</span>Actionable Side Information，页面中对应 reflective dataset。</div>
+        <div><span>Merge</span>把两个 Pareto 候选相对共同祖先的互补改动拼成新候选。</div>
+      </div>
+    </section>
+
+    <section class="section map">
+      <nav class="rail" aria-label="code sections">
+        <a href="#api">1. 公开入口</a>
+        <a href="#adapter">2. Adapter 合同</a>
+        <a href="#engine">3. 优化循环</a>
+        <a href="#mutation">4. 反思变异</a>
+        <a href="#pareto">5. Pareto 状态</a>
+        <a href="#merge">6. 系统感知合并</a>
+      </nav>
+
+      <div>
+        <article class="code-card" id="api">
+          <div class="code-head">
+            <h3>1. `api.optimize`：把论文算法拆成可替换策略</h3>
+            <div class="paper-note">论文说的是一个算法；官方实现先把它拆成 candidate selector、component selector、batch sampler、proposer、acceptance criterion 和 engine。</div>
+          </div>
+          <div class="code-grid">
+            <div class="ln">43</div><div class="src"><span class="k">def</span> <span class="f">optimize</span>(seed_candidate, trainset, valset=None, adapter=None, ...):</div><div class="note"><b>入口</b>用户只需要交 seed、数据、adapter/evaluator、预算和反思模型。</div>
+            <div class="ln">53</div><div class="src">candidate_selection_strategy = <span class="s">"pareto"</span></div><div class="note"><b>论文概念</b>默认父代来自 Pareto，而不是简单取当前平均分最高。</div>
+            <div class="ln">55</div><div class="src">frontier_type = <span class="s">"instance"</span></div><div class="note"><b>代码扩展</b>可以按样本、目标、混合或笛卡尔粒度维护前沿。</div>
+            <div class="ln">57</div><div class="src">batch_sampler = <span class="s">"epoch_shuffled"</span>; reflection_minibatch_size = None</div><div class="note"><b>采样</b>反思不需要每轮全量训练集，先用小批量生成可操作反馈。</div>
+            <div class="ln">65</div><div class="src">use_merge = <span class="k">False</span>; max_merge_invocations = 5</div><div class="note"><b>可选能力</b>system-aware merge 是独立开关，默认先跑反思变异主线。</div>
+            <div class="ln">378</div><div class="src">reflective_proposer = ReflectiveMutationProposer(...)</div><div class="note"><b>组装</b>所有用于“读轨迹、改文本”的依赖在这里注入。</div>
+            <div class="ln">413</div><div class="src">engine = GEPAEngine(... reflective_proposer=..., merge_proposer=...)</div><div class="note"><b>分层</b>`optimize` 负责配置解析；`GEPAEngine.run` 负责算法时钟。</div>
+          </div>
+        </article>
+
+        <article class="code-card" id="adapter">
+          <div class="code-head">
+            <h3>2. `GEPAAdapter`：把任意系统接入“轨迹 → 反思”</h3>
+            <div class="paper-note">论文中的 compound AI system 在代码里不是基类继承树，而是 adapter 协议。GEPA 只要求它能评估、能给出轨迹、能把轨迹压成反思数据。</div>
+          </div>
+          <div class="code-grid">
+            <div class="ln">12</div><div class="src">Candidate = dict[str, str]</div><div class="note"><b>候选形态</b>多组件系统被简化成“组件名到文本”的映射。</div>
+            <div class="ln">16</div><div class="src"><span class="k">class</span> EvaluationBatch: outputs; scores; trajectories; objective_scores</div><div class="note"><b>评估产物</b>分数驱动接受与 Pareto，轨迹驱动反思。</div>
+            <div class="ln">121</div><div class="src"><span class="k">def</span> <span class="f">evaluate</span>(batch, candidate, capture_traces=False)</div><div class="note"><b>执行</b>`capture_traces=True` 时必须返回可供反思的数据。</div>
+            <div class="ln">161</div><div class="src"><span class="k">def</span> <span class="f">make_reflective_dataset</span>(candidate, eval_batch, components_to_update)</div><div class="note"><b>ASI 落点</b>这里把原始轨迹变成 JSON 可序列化的“失败证据”。</div>
+            <div class="ln">195</div><div class="src">propose_new_texts: ProposalFn | None = None</div><div class="note"><b>自定义</b>adapter 可接管 proposal；否则走默认 reflection LM prompt。</div>
+          </div>
+        </article>
+
+        <article class="code-card" id="engine">
+          <div class="code-head">
+            <h3>3. `GEPAEngine.run`：算法的主循环</h3>
+            <div class="paper-note">这里就是论文流程的工程版本：评估 seed，保存状态，尝试 merge，跑 reflective mutation，接受后更新候选池和前沿。</div>
+          </div>
+          <div class="code-grid">
+            <div class="ln">527</div><div class="src">seed_valset_evaluation = valset_evaluator(self.seed_candidate)</div><div class="note"><b>基线</b>seed 先跑完整验证，用作候选 0 和初始 Pareto 前沿。</div>
+            <div class="ln">530</div><div class="src">state = initialize_gepa_state(... seed_valset_evaluation=...)</div><div class="note"><b>状态</b>候选池、parent lineage、frontier、预算计数都集中在 GEPAState。</div>
+            <div class="ln">628</div><div class="src"><span class="k">while</span> <span class="k">not</span> self._should_stop(state):</div><div class="note"><b>预算</b>停止条件可以来自 metric calls、反思成本、文件 stopper 或自定义回调。</div>
+            <div class="ln">664</div><div class="src"><span class="c"># Attempt merge first if scheduled</span></div><div class="note"><b>顺序</b>merge 只在上一轮发现新候选且被调度时先于 mutation。</div>
+            <div class="ln">746</div><div class="src">output = self.reflective_proposer.propose_output(state)</div><div class="note"><b>主路径</b>每轮常规动作是“选父代、采样、构造反思数据、生成 child”。</div>
+            <div class="ln">747</div><div class="src">proposal_accepted = self._process_proposal_output(...)</div><div class="note"><b>接受</b>proposal 的状态更新与全验证加入池由 engine 串行处理。</div>
+          </div>
+        </article>
+
+        <article class="code-card" id="mutation">
+          <div class="code-head">
+            <h3>4. `ReflectiveMutationProposer`：从失败轨迹生成 child</h3>
+            <div class="paper-note">这是“Reflective Prompt Evolution”的最直接代码实现。注意它先评估 parent，再让 adapter 把轨迹转成反思数据，然后提议新文本并在同一 minibatch 上比较。</div>
+          </div>
+          <div class="code-grid">
+            <div class="ln">191</div><div class="src">curr_prog_id = self.candidate_selector.select_candidate_idx(state)</div><div class="note"><b>父代</b>默认会落到 ParetoCandidateSelector。</div>
+            <div class="ln">212</div><div class="src">subsample_ids = self.batch_sampler.next_minibatch_ids(...)</div><div class="note"><b>小批量</b>用训练样本制造高信号反馈，不直接全量搜索。</div>
+            <div class="ln">268</div><div class="src">eval_curr = self.adapter.evaluate(..., capture_traces=True)</div><div class="note"><b>轨迹</b>这一步要求 adapter 捕获可解释执行过程。</div>
+            <div class="ln">335</div><div class="src">predictor_names_to_update = self.module_selector(...)</div><div class="note"><b>组件选择</b>多 prompt/多文本系统可以一轮只改一个组件。</div>
+            <div class="ln">341</div><div class="src">reflective_dataset = self.adapter.make_reflective_dataset(...)</div><div class="note"><b>ASI</b>原始轨迹在这里被压缩成反思模型可读的数据。</div>
+            <div class="ln">369</div><div class="src">new_texts, prompts, raw_lm_outputs = self.propose_new_texts(...)</div><div class="note"><b>反思变异</b>默认由 reflection LM 改文本，也可以被 custom proposer 替换。</div>
+            <div class="ln">420</div><div class="src">eval_after = self.adapter.evaluate(ctx.minibatch, new_candidate, capture_traces=True)</div><div class="note"><b>局部试验</b>child 先在同一批样本上和 parent 对比。</div>
+            <div class="ln">447</div><div class="src">proposal = CandidateProposal(... tag=<span class="s">"reflective_mutation"</span>)</div><div class="note"><b>封装</b>proposal 带着新候选、父代、前后分数和 LM 元数据回到 engine。</div>
+          </div>
+        </article>
+
+        <article class="code-card" id="pareto">
+          <div class="code-head">
+            <h3>5. Pareto：局部最优者如何继续拥有繁殖权</h3>
+            <div class="paper-note">官方实现维护的是“每个 frontier key 当前分数最高的候选集合”，再按这些集合里的出现频次采样。这样能保护在某些样本或目标上特别强的候选。</div>
+          </div>
+          <div class="code-grid">
+            <div class="ln">162</div><div class="src">pareto_front_valset: dict[DataId, float]</div><div class="note"><b>每题最高分</b>记录每个验证样本当前最佳分数。</div>
+            <div class="ln">163</div><div class="src">program_at_pareto_front_valset: dict[DataId, set[ProgramIdx]]</div><div class="note"><b>贡献者</b>记录哪些候选达到该样本当前最佳。</div>
+            <div class="ln">486</div><div class="src"><span class="k">def</span> <span class="f">_update_pareto_front_for_val_id</span>(...)</div><div class="note"><b>更新规则</b>更高分替换，平分则共同留在前沿集合。</div>
+            <div class="ln">527</div><div class="src"><span class="k">def</span> <span class="f">update_state_with_new_program</span>(...)</div><div class="note"><b>入池</b>被接受的新候选先追加到候选池，再逐验证项更新 frontier。</div>
+            <div class="ln">603</div><div class="src"><span class="k">def</span> <span class="f">get_pareto_front_mapping</span>(self)</div><div class="note"><b>统一接口</b>selector 不需要知道当前是 instance、objective、hybrid 还是 cartesian。</div>
+            <div class="ln">90</div><div class="src"><span class="k">def</span> <span class="f">select_program_candidate_from_pareto_front</span>(pareto_front_programs, scores, rng)</div><div class="note"><b>父代采样</b>先移除被支配候选，再按出现在 frontier 中的频率采样。</div>
+            <div class="ln">106</div><div class="src">sampling_list = [prog_idx ... for _ in range(freq)]</div><div class="note"><b>直觉</b>覆盖更多 frontier key 的候选更容易被选中，但不是唯一机会。</div>
+          </div>
+        </article>
+
+        <article class="code-card" id="merge">
+          <div class="code-head">
+            <h3>6. `MergeProposer`：把互补经验合并到一个候选</h3>
+            <div class="paper-note">论文里的 system-aware merge 在代码中是“找共同祖先 → 对比两个后代哪些组件继承/改变 → 组合互补组件 → 小样本验证”。</div>
+          </div>
+          <div class="code-grid">
+            <div class="ln">118</div><div class="src"><span class="k">def</span> <span class="f">sample_and_attempt_merge_programs_by_common_predictors</span>(...)</div><div class="note"><b>核心算法</b>只尝试有共同祖先且组件变化可解释的候选对。</div>
+            <div class="ln">155</div><div class="src">new_program = deepcopy(program_candidates[ancestor])</div><div class="note"><b>基座</b>合并不是自由生成，而是从共同祖先拷贝出发。</div>
+            <div class="ln">163</div><div class="src"><span class="k">for</span> pred_name <span class="k">in</span> pred_names:</div><div class="note"><b>逐组件合并</b>对每个文本组件判断从哪个后代继承。</div>
+            <div class="ln">299</div><div class="src">pareto_front_programs = state.get_pareto_front_mapping()</div><div class="note"><b>候选来源</b>merge 父母也来自 Pareto，而不是全候选池任意组合。</div>
+            <div class="ln">332</div><div class="src">subsample_ids = self.select_eval_subsample_for_merged_program(...)</div><div class="note"><b>验证样本</b>选双方有可比记录且能体现互补性的 val 子集。</div>
+            <div class="ln">688</div><div class="src"><span class="k">if</span> new_sum &gt;= max(parent_sums):</div><div class="note"><b>接受门槛</b>merge 至少要不弱于两个父代中更强的一方，才进入全验证。</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>一眼读懂：官方实现与教学版的差异</h2>
+      <div class="summary-grid">
+        <article class="summary">
+          <strong>教学版：一个 prompt。</strong>
+          <p>官方版：`dict[str, str]` 多组件 candidate，并通过 component selector 决定本轮修改哪个组件。</p>
+        </article>
+        <article class="summary">
+          <strong>教学版：规则化反思。</strong>
+          <p>官方版：adapter 产出 reflective dataset，默认通过 reflection LM 生成新文本，同时保留 prompt 与 raw output 元数据。</p>
+        </article>
+        <article class="summary">
+          <strong>教学版：简单 Pareto。</strong>
+          <p>官方版：支持 instance/objective/hybrid/cartesian frontier，还能用 merge 把互补候选重新组合。</p>
+        </article>
+      </div>
+    </section>
+
+    <footer>
+      <p>
+        Sources:
+        <a href="https://arxiv.org/abs/2507.19457">arXiv:2507.19457v2</a>,
+        <a href="https://github.com/gepa-ai/gepa">gepa-ai/gepa</a>,
+        code snapshot
+        <a href="https://github.com/gepa-ai/gepa/tree/5910c6412681dd697812c926c4fff937857dbba4">5910c641</a>.
+        Key files:
+        <a href="https://github.com/gepa-ai/gepa/blob/5910c6412681dd697812c926c4fff937857dbba4/src/gepa/api.py">api.py</a>,
+        <a href="https://github.com/gepa-ai/gepa/blob/5910c6412681dd697812c926c4fff937857dbba4/src/gepa/core/engine.py">core/engine.py</a>,
+        <a href="https://github.com/gepa-ai/gepa/blob/5910c6412681dd697812c926c4fff937857dbba4/src/gepa/core/state.py">core/state.py</a>,
+        <a href="https://github.com/gepa-ai/gepa/blob/5910c6412681dd697812c926c4fff937857dbba4/src/gepa/proposer/reflective_mutation/reflective_mutation.py">reflective_mutation.py</a>,
+        <a href="https://github.com/gepa-ai/gepa/blob/5910c6412681dd697812c926c4fff937857dbba4/src/gepa/proposer/merge.py">merge.py</a>.
+      </p>
+    </footer>
+  </main>
+</body>
+</html>
