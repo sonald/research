@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TLS 工作流程交互动画</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f6;
+      --panel: #ffffff;
+      --ink: #16201f;
+      --muted: #5f6d69;
+      --line: #d9dfdb;
+      --client: #0d9488;
+      --server: #d94645;
+      --network: #577590;
+      --ok: #2f8f4e;
+      --warn: #b26a00;
+      --shadow: 0 18px 50px rgba(31, 45, 42, 0.12);
+      --radius: 8px;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(90deg, rgba(87, 117, 144, 0.08) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(87, 117, 144, 0.08) 1px, transparent 1px),
+        var(--bg);
+      background-size: 34px 34px;
+      color: var(--ink);
+      font-family: var(--sans);
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      width: min(1480px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 34px;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 50px);
+      line-height: 1.02;
+      font-weight: 820;
+    }
+
+    .subtitle {
+      max-width: 830px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .btn {
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 13px;
+      cursor: pointer;
+      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+
+    .btn:hover {
+      border-color: #9fb1aa;
+      transform: translateY(-1px);
+    }
+
+    .btn.primary {
+      background: var(--ink);
+      color: white;
+      border-color: var(--ink);
+      min-width: 92px;
+    }
+
+    .btn.icon {
+      width: 42px;
+      padding: 0;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(360px, 0.9fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .layout > *,
+    .side,
+    .detail,
+    .code-panel,
+    .stage {
+      min-width: 0;
+    }
+
+    .stage,
+    .detail,
+    .code-panel,
+    .step-list {
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .stage {
+      position: relative;
+      min-height: 550px;
+      overflow: hidden;
+    }
+
+    .stage-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfb;
+    }
+
+    .mode-toggle {
+      display: inline-grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: white;
+    }
+
+    .mode-toggle button {
+      border: 0;
+      background: transparent;
+      padding: 8px 12px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+
+    .mode-toggle button.active {
+      background: #16201f;
+      color: white;
+    }
+
+    .progress {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      min-width: min(460px, 55vw);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .progress-track {
+      height: 8px;
+      border-radius: 999px;
+      background: #e5ebe8;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--client), var(--server));
+      transition: width 260ms ease;
+    }
+
+    .lanes {
+      position: relative;
+      display: grid;
+      grid-template-columns: 210px 1fr 210px;
+      gap: 0;
+      min-height: 492px;
+      padding: 24px 22px 20px;
+    }
+
+    .lane {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 2;
+    }
+
+    .entity {
+      width: 172px;
+      min-height: 170px;
+      border-radius: var(--radius);
+      border: 2px solid currentColor;
+      background: white;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+    }
+
+    .entity.client {
+      color: var(--client);
+    }
+
+    .entity.server {
+      color: var(--server);
+    }
+
+    .entity-title {
+      padding: 10px 12px;
+      border-bottom: 1px solid currentColor;
+      font-weight: 800;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .entity-body {
+      padding: 13px 12px;
+      color: var(--ink);
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      font-size: 13px;
+      min-width: 0;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fbfcfb;
+      color: var(--muted);
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .chip.hot {
+      color: white;
+      border-color: transparent;
+      background: var(--ink);
+    }
+
+    .wire-wrap {
+      position: relative;
+      min-height: 420px;
+      margin-top: 14px;
+      border-left: 1px dashed rgba(87, 117, 144, 0.35);
+      border-right: 1px dashed rgba(87, 117, 144, 0.35);
+    }
+
+    .time-marker {
+      position: absolute;
+      left: 50%;
+      top: 4px;
+      transform: translateX(-50%);
+      color: var(--muted);
+      font-size: 12px;
+      writing-mode: vertical-rl;
+      letter-spacing: 0.08em;
+    }
+
+    .packet {
+      --top: 70px;
+      --from: 8%;
+      --to: 72%;
+      position: absolute;
+      top: var(--top);
+      left: var(--from);
+      width: min(245px, 46%);
+      min-height: 54px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: white;
+      box-shadow: 0 8px 22px rgba(22, 32, 31, 0.12);
+      padding: 9px 10px;
+      opacity: 0.08;
+      transform: translateX(0) scale(0.96);
+      transition: opacity 220ms ease, transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 220ms ease;
+      z-index: 4;
+    }
+
+    .packet.active {
+      opacity: 1;
+      border-color: var(--network);
+      transform: translateX(calc(var(--to) - var(--from))) scale(1);
+    }
+
+    .packet.past {
+      opacity: 0.52;
+      transform: translateX(calc(var(--to) - var(--from))) scale(0.98);
+    }
+
+    .packet.server-to-client {
+      --from: 72%;
+      --to: 8%;
+    }
+
+    .packet-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .packet-meta {
+      margin-top: 5px;
+      color: var(--muted);
+      font: 12px/1.35 var(--mono);
+      overflow-wrap: anywhere;
+    }
+
+    .key-ring {
+      display: grid;
+      gap: 8px;
+      width: 100%;
+      margin-top: 14px;
+      font: 12px/1.4 var(--mono);
+      color: var(--muted);
+    }
+
+    .key-row {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.75);
+      padding: 8px;
+      opacity: 0.4;
+      transition: opacity 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+
+    .key-row.active {
+      opacity: 1;
+      border-color: currentColor;
+      background: white;
+    }
+
+    .side {
+      display: grid;
+      gap: 14px;
+    }
+
+    .detail {
+      padding: 16px;
+    }
+
+    .detail-kicker {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .detail h2 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      line-height: 1.15;
+    }
+
+    .detail p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .facts {
+      display: grid;
+      gap: 8px;
+    }
+
+    .fact {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 8px;
+      align-items: start;
+      padding: 9px 0;
+      border-top: 1px solid var(--line);
+      font-size: 14px;
+    }
+
+    .fact b {
+      color: var(--ink);
+    }
+
+    .fact span {
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .step-list {
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .step-item {
+      width: 100%;
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--muted);
+      text-align: left;
+      padding: 6px 8px;
+      cursor: pointer;
+    }
+
+    .step-item:hover {
+      background: #f4f7f5;
+      color: var(--ink);
+    }
+
+    .step-item.active {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: white;
+    }
+
+    .step-index {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(87, 117, 144, 0.12);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .step-item.active .step-index {
+      color: var(--ink);
+      background: white;
+    }
+
+    .code-panel {
+      padding: 15px;
+    }
+
+    .code-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .code-head h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    pre {
+      margin: 0;
+      overflow: auto;
+      max-width: 100%;
+      border-radius: var(--radius);
+      border: 1px solid #263532;
+      background: #101816;
+      color: #e8f2ee;
+      padding: 14px;
+      font: 12px/1.55 var(--mono);
+      max-height: 310px;
+    }
+
+    .run-output {
+      min-height: 108px;
+      max-width: 100%;
+      margin-top: 10px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfb;
+      font: 12px/1.55 var(--mono);
+      color: var(--muted);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+
+    @media (max-width: 1060px) {
+      .topbar,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        justify-content: flex-start;
+      }
+
+      .progress {
+        min-width: 100%;
+      }
+
+      .lanes {
+        grid-template-columns: 150px 1fr 150px;
+        padding-inline: 12px;
+      }
+
+      .entity {
+        width: 132px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100vw - 20px, 680px);
+        padding-top: 14px;
+      }
+
+      .stage {
+        min-height: 700px;
+      }
+
+      .stage-header {
+        display: grid;
+      }
+
+      .lanes {
+        grid-template-columns: 1fr;
+        min-height: 620px;
+        gap: 12px;
+      }
+
+      .lane {
+        align-items: stretch;
+      }
+
+      .entity {
+        width: 100%;
+        min-height: 120px;
+      }
+
+      .wire-wrap {
+        order: 2;
+        min-height: 360px;
+        margin: 0;
+      }
+
+      .lane.server-lane {
+        order: 3;
+      }
+
+      .packet {
+        width: 70%;
+        --from: 4%;
+        --to: 24%;
+      }
+
+      .packet.server-to-client {
+        --from: 24%;
+        --to: 4%;
+      }
+
+      .fact {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1>TLS 是如何把明文变成安全通道的</h1>
+        <p class="subtitle">这是一个以 TLS 1.3 为主线的交互动画：从 TCP 连接、ClientHello、证书验证、ECDHE 密钥协商、Finished 校验，到最后发送加密 HTTP 请求。</p>
+      </div>
+      <div class="controls" aria-label="动画控制">
+        <button class="btn icon" id="prevBtn" title="上一步" aria-label="上一步">‹</button>
+        <button class="btn primary" id="playBtn">播放</button>
+        <button class="btn icon" id="nextBtn" title="下一步" aria-label="下一步">›</button>
+        <button class="btn" id="resetBtn">重置</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <div class="stage">
+        <div class="stage-header">
+          <div class="mode-toggle" aria-label="协议版本">
+            <button class="active" id="tls13Btn">TLS 1.3</button>
+            <button id="tls12Btn">TLS 1.2 对照</button>
+          </div>
+          <div class="progress" aria-live="polite">
+            <span id="stepNow">1</span>
+            <div class="progress-track" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
+            <span id="stepTotal">9</span>
+          </div>
+        </div>
+
+        <div class="lanes">
+          <div class="lane client-lane">
+            <div class="entity client">
+              <div class="entity-title"><span>Client</span><span>浏览器</span></div>
+              <div class="entity-body" id="clientState">
+                <span class="chip">准备访问 https://example.com</span>
+              </div>
+            </div>
+            <div class="key-ring">
+              <div class="key-row" id="clientRandom">client_random: 待生成</div>
+              <div class="key-row" id="clientShare">key_share: 待生成</div>
+              <div class="key-row" id="clientTraffic">client_traffic_secret: 未派生</div>
+            </div>
+          </div>
+
+          <div class="wire-wrap" id="wireWrap" aria-label="网络报文动画">
+            <div class="time-marker">time flows down</div>
+          </div>
+
+          <div class="lane server-lane">
+            <div class="entity server">
+              <div class="entity-title"><span>Server</span><span>站点</span></div>
+              <div class="entity-body" id="serverState">
+                <span class="chip">等待连接</span>
+              </div>
+            </div>
+            <div class="key-ring">
+              <div class="key-row" id="serverCert">certificate: 未发送</div>
+              <div class="key-row" id="serverShare">key_share: 待生成</div>
+              <div class="key-row" id="serverTraffic">server_traffic_secret: 未派生</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <section class="detail" aria-live="polite">
+          <div class="detail-kicker" id="detailKicker">Step 1</div>
+          <h2 id="detailTitle">建立 TCP 连接</h2>
+          <p id="detailText"></p>
+          <div class="facts" id="facts"></div>
+          <div class="legend">
+            <span><i class="dot" style="background: var(--client)"></i>客户端材料</span>
+            <span><i class="dot" style="background: var(--server)"></i>服务端材料</span>
+            <span><i class="dot" style="background: var(--network)"></i>网络报文</span>
+          </div>
+        </section>
+
+        <nav class="step-list" id="stepList" aria-label="TLS 步骤"></nav>
+
+        <section class="code-panel">
+          <div class="code-head">
+            <h2>简化代码演示</h2>
+            <button class="btn" id="runToyBtn">运行 toy 握手</button>
+          </div>
+          <pre><code id="codeBlock"></code></pre>
+          <div class="run-output" id="runOutput">点击“运行 toy 握手”查看一个极简密钥协商。真实 TLS 1.3 使用 ECDHE、HKDF、证书链验证和 AEAD；这里故意用小数字方便观察。</div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const steps = [
+      {
+        title: "建立 TCP 连接",
+        packet: "TCP 3-way handshake",
+        meta: "SYN → SYN/ACK → ACK",
+        dir: "client",
+        top: 36,
+        text: "TLS 运行在可靠的传输之上。浏览器先和服务器建立 TCP 连接；TLS 本身从下一步的 ClientHello 才正式开始。",
+        client: ["目标域名: example.com", "端口: 443"],
+        server: ["监听 443", "准备接收 TLS"],
+        active: ["clientRandom"],
+        facts: [
+          ["目的", "先获得可靠字节流，TLS 记录会通过这个连接传输。"],
+          ["注意", "DNS 查询、TCP、TLS、HTTP 是不同层；HTTPS 里的 S 来自 TLS。"]
+        ]
+      },
+      {
+        title: "ClientHello",
+        packet: "ClientHello",
+        meta: "version, random, SNI, ALPN, cipher_suites, key_share",
+        dir: "client",
+        top: 82,
+        text: "客户端发出能力清单和临时公钥。TLS 1.3 通常在第一条消息里就带 key_share，让服务端可以立即计算共享密钥。",
+        client: ["client_random 已生成", "支持 TLS_AES_128_GCM_SHA256", "SNI: example.com", "ALPN: h2/http1.1"],
+        server: ["读取客户端能力", "选择证书与参数"],
+        active: ["clientRandom", "clientShare"],
+        facts: [
+          ["发送明文", "ClientHello 大部分是明文，方便服务端知道要访问哪个站点。"],
+          ["隐私增强", "ECH 可以隐藏 ClientHello 里的部分敏感字段，但部署仍在推进中。"]
+        ]
+      },
+      {
+        title: "ServerHello",
+        packet: "ServerHello",
+        meta: "selected_version, cipher_suite, server key_share",
+        dir: "server",
+        top: 132,
+        text: "服务端选定 TLS 版本、密码套件，并返回自己的临时公钥。双方现在都能用 ECDHE 算出同一个共享秘密，但旁观者不能从两个公钥反推出它。",
+        client: ["接收服务端 key_share", "计算 shared_secret"],
+        server: ["server_random 已生成", "计算 shared_secret"],
+        active: ["clientRandom", "clientShare", "serverShare"],
+        facts: [
+          ["前向保密", "临时密钥用完即丢；即使将来服务器私钥泄漏，旧会话也不应被解密。"],
+          ["TLS 1.2 差异", "TLS 1.2 的消息更多，密钥派生和 Finished 之前的加密边界也不同。"]
+        ]
+      },
+      {
+        title: "加密握手开始",
+        packet: "EncryptedExtensions",
+        meta: "ALPN result, server parameters",
+        dir: "server",
+        top: 184,
+        text: "从这里开始，TLS 1.3 的大部分握手消息已经被握手密钥加密。网络能看到有数据流动，却看不到具体扩展内容。",
+        client: ["派生 handshake traffic secret", "解密服务端扩展"],
+        server: ["派生 handshake traffic secret", "加密扩展消息"],
+        active: ["clientShare", "serverShare"],
+        facts: [
+          ["密钥派生", "shared_secret 会经过 HKDF 派生出不同用途的密钥，避免一个密钥到处复用。"],
+          ["记录层", "TLS record layer 会把消息切片、编号、加密、认证。"]
+        ]
+      },
+      {
+        title: "服务器证书",
+        packet: "Certificate",
+        meta: "leaf cert + intermediate certs",
+        dir: "server",
+        top: 236,
+        text: "服务端发送证书链，证明自己拥有 example.com 的身份凭据。证书内容被握手密钥加密传输，但客户端仍要按信任链检查。",
+        client: ["校验证书链", "检查域名匹配", "检查有效期与吊销策略"],
+        server: ["发送证书链", "准备签名证明"],
+        active: ["serverCert"],
+        facts: [
+          ["CA 信任", "浏览器内置根 CA；服务器通常发送叶子证书和中间证书。"],
+          ["域名绑定", "证书里的 SAN 必须覆盖当前访问的域名。"]
+        ]
+      },
+      {
+        title: "CertificateVerify",
+        packet: "CertificateVerify",
+        meta: "signature over handshake transcript",
+        dir: "server",
+        top: 288,
+        text: "服务端用证书对应的私钥，对当前握手摘要签名。客户端用证书里的公钥验证签名，确认对方真的持有私钥。",
+        client: ["验证签名", "绑定证书与握手上下文"],
+        server: ["使用证书私钥签名", "不泄漏私钥"],
+        active: ["serverCert"],
+        facts: [
+          ["防中间人", "攻击者即使转发证书，也无法伪造私钥签名。"],
+          ["transcript", "TLS 会持续哈希握手消息，把上下文绑定进校验。"]
+        ]
+      },
+      {
+        title: "Finished 校验",
+        packet: "Finished",
+        meta: "MAC(handshake transcript)",
+        dir: "server",
+        top: 340,
+        text: "服务端发送 Finished，证明自己看到的握手历史和密钥派生结果与客户端一致。客户端随后也发送自己的 Finished。",
+        client: ["验证 server Finished", "发送 client Finished"],
+        server: ["发送 server Finished", "验证 client Finished"],
+        active: ["clientTraffic", "serverTraffic"],
+        facts: [
+          ["完整性", "任何握手消息被篡改，Finished 校验都会失败。"],
+          ["完成点", "双方都验证 Finished 后，握手才算完成。"]
+        ]
+      },
+      {
+        title: "派生应用数据密钥",
+        packet: "Key Update Boundary",
+        meta: "application traffic secrets",
+        dir: "client",
+        top: 392,
+        text: "握手密钥不直接拿来加密 HTTP。双方继续用 HKDF 派生 application traffic secrets，分别保护客户端到服务端、服务端到客户端的数据。",
+        client: ["client_app_secret 可用", "准备加密 HTTP 请求"],
+        server: ["server_app_secret 可用", "准备加密 HTTP 响应"],
+        active: ["clientTraffic", "serverTraffic"],
+        facts: [
+          ["方向隔离", "客户端写密钥和服务端写密钥不同。"],
+          ["可更新", "长连接中可以 KeyUpdate，降低单个密钥使用时间。"]
+        ]
+      },
+      {
+        title: "加密 HTTP 数据",
+        packet: "Encrypted Application Data",
+        meta: "GET /  +  response, protected by AEAD",
+        dir: "client",
+        top: 444,
+        text: "现在浏览器把 HTTP 请求放进 TLS application data 记录里。旁观者只能看到连接两端、时间和数据量，看不到请求路径、Cookie 或响应正文。",
+        client: ["发送加密 GET /", "校验响应认证标签"],
+        server: ["解密请求", "返回加密响应"],
+        active: ["clientTraffic", "serverTraffic"],
+        facts: [
+          ["AEAD", "AES-GCM 或 ChaCha20-Poly1305 同时提供加密和完整性认证。"],
+          ["会话恢复", "后续连接可用 PSK/Session Ticket 减少往返，但仍要维护安全边界。"]
+        ]
+      }
+    ];
+
+    const tls12Notes = [
+      "TLS 1.2 通常需要更多往返，ServerHello 后还有 Certificate、ServerKeyExchange、ServerHelloDone 等消息。",
+      "TLS 1.2 的 ChangeCipherSpec 是显式切换加密状态的历史机制；TLS 1.3 简化了这部分。",
+      "TLS 1.2 可以使用 RSA 密钥交换，但现代部署应使用 ECDHE 来获得前向保密。",
+      "TLS 1.3 删除了许多旧算法和不安全组合，只保留 AEAD 类密码套件。"
+    ];
+
+    const codeDemo = `// 极简演示：只展示“双方算出同一个共享秘密”的核心想法
+// 真实 TLS 1.3: X25519/P-256 ECDHE + HKDF + 证书链 + Finished + AEAD
+const p = 23;     // toy prime，真实 TLS 不会用这么小的数
+const g = 5;      // generator
+
+const clientPrivate = 6;
+const serverPrivate = 15;
+
+const clientPublic = modPow(g, clientPrivate, p);
+const serverPublic = modPow(g, serverPrivate, p);
+
+const clientShared = modPow(serverPublic, clientPrivate, p);
+const serverShared = modPow(clientPublic, serverPrivate, p);
+
+console.log({ clientPublic, serverPublic });
+console.log(clientShared === serverShared); // true
+
+function modPow(base, exp, mod) {
+  let result = 1;
+  for (let i = 0; i < exp; i += 1) {
+    result = (result * base) % mod;
+  }
+  return result;
+}`;
+
+    const els = {
+      wire: document.getElementById("wireWrap"),
+      stepList: document.getElementById("stepList"),
+      detailKicker: document.getElementById("detailKicker"),
+      detailTitle: document.getElementById("detailTitle"),
+      detailText: document.getElementById("detailText"),
+      facts: document.getElementById("facts"),
+      clientState: document.getElementById("clientState"),
+      serverState: document.getElementById("serverState"),
+      progressBar: document.getElementById("progressBar"),
+      stepNow: document.getElementById("stepNow"),
+      stepTotal: document.getElementById("stepTotal"),
+      playBtn: document.getElementById("playBtn"),
+      codeBlock: document.getElementById("codeBlock"),
+      runOutput: document.getElementById("runOutput")
+    };
+
+    let stepIndex = 0;
+    let playing = false;
+    let timer = null;
+    let mode = "tls13";
+
+    els.stepTotal.textContent = String(steps.length);
+    els.codeBlock.textContent = codeDemo;
+
+    function createPackets() {
+      steps.forEach((step, index) => {
+        const packet = document.createElement("div");
+        packet.className = "packet" + (step.dir === "server" ? " server-to-client" : "");
+        packet.style.setProperty("--top", `${step.top}px`);
+        packet.dataset.index = String(index);
+        packet.innerHTML = `
+          <div class="packet-title"><span>${step.packet}</span><span>${step.dir === "server" ? "←" : "→"}</span></div>
+          <div class="packet-meta">${step.meta}</div>
+        `;
+        els.wire.appendChild(packet);
+      });
+    }
+
+    function createStepList() {
+      steps.forEach((step, index) => {
+        const item = document.createElement("button");
+        item.className = "step-item";
+        item.type = "button";
+        item.innerHTML = `<span class="step-index">${index + 1}</span><span>${step.title}</span>`;
+        item.addEventListener("click", () => {
+          pause();
+          render(index);
+        });
+        els.stepList.appendChild(item);
+      });
+    }
+
+    function render(index) {
+      stepIndex = Math.max(0, Math.min(index, steps.length - 1));
+      const step = steps[stepIndex];
+      const tls12Text = mode === "tls12" ? " TLS 1.2 对照：" + tls12Notes[stepIndex % tls12Notes.length] : "";
+
+      els.detailKicker.textContent = `Step ${stepIndex + 1} / ${steps.length}`;
+      els.detailTitle.textContent = step.title;
+      els.detailText.textContent = step.text + tls12Text;
+      els.stepNow.textContent = String(stepIndex + 1);
+      els.progressBar.style.width = `${((stepIndex + 1) / steps.length) * 100}%`;
+
+      els.facts.innerHTML = step.facts.map(([label, value]) => (
+        `<div class="fact"><b>${label}</b><span>${value}</span></div>`
+      )).join("");
+
+      els.clientState.innerHTML = step.client.map((text, i) => (
+        `<span class="chip ${i === 0 ? "hot" : ""}">${text}</span>`
+      )).join("");
+
+      els.serverState.innerHTML = step.server.map((text, i) => (
+        `<span class="chip ${i === 0 ? "hot" : ""}">${text}</span>`
+      )).join("");
+
+      document.querySelectorAll(".packet").forEach((packet, i) => {
+        packet.classList.toggle("past", i < stepIndex);
+        packet.classList.toggle("active", i === stepIndex);
+      });
+
+      document.querySelectorAll(".step-item").forEach((item, i) => {
+        item.classList.toggle("active", i === stepIndex);
+      });
+
+      document.querySelectorAll(".key-row").forEach(row => row.classList.remove("active"));
+      step.active.forEach(id => document.getElementById(id).classList.add("active"));
+
+      updateKeyText();
+    }
+
+    function updateKeyText() {
+      document.getElementById("clientRandom").textContent = stepIndex >= 1 ? "client_random: c7a1...91fd" : "client_random: 待生成";
+      document.getElementById("clientShare").textContent = stepIndex >= 1 ? "client key_share: X25519 pub C" : "key_share: 待生成";
+      document.getElementById("serverShare").textContent = stepIndex >= 2 ? "server key_share: X25519 pub S" : "key_share: 待生成";
+      document.getElementById("serverCert").textContent = stepIndex >= 4 ? "certificate: example.com chain" : "certificate: 未发送";
+      document.getElementById("clientTraffic").textContent = stepIndex >= 6 ? "client_traffic_secret: HKDF(...)" : "client_traffic_secret: 未派生";
+      document.getElementById("serverTraffic").textContent = stepIndex >= 6 ? "server_traffic_secret: HKDF(...)" : "server_traffic_secret: 未派生";
+    }
+
+    function next() {
+      if (stepIndex === steps.length - 1) {
+        pause();
+        return;
+      }
+      render(stepIndex + 1);
+    }
+
+    function previous() {
+      render(stepIndex - 1);
+    }
+
+    function play() {
+      if (playing) {
+        pause();
+        return;
+      }
+      playing = true;
+      els.playBtn.textContent = "暂停";
+      if (stepIndex === steps.length - 1) render(0);
+      timer = window.setInterval(next, 1450);
+    }
+
+    function pause() {
+      playing = false;
+      els.playBtn.textContent = "播放";
+      if (timer) window.clearInterval(timer);
+      timer = null;
+    }
+
+    function modPow(base, exp, mod) {
+      let result = 1;
+      for (let i = 0; i < exp; i += 1) {
+        result = (result * base) % mod;
+      }
+      return result;
+    }
+
+    function runToyHandshake() {
+      const p = 23;
+      const g = 5;
+      const clientPrivate = 6;
+      const serverPrivate = 15;
+      const clientPublic = modPow(g, clientPrivate, p);
+      const serverPublic = modPow(g, serverPrivate, p);
+      const clientShared = modPow(serverPublic, clientPrivate, p);
+      const serverShared = modPow(clientPublic, serverPrivate, p);
+      const toyKey = `toy-key-${clientShared}`;
+
+      els.runOutput.textContent = [
+        `公开参数: p=${p}, g=${g}`,
+        `Client 私有数=${clientPrivate}, 公开数=${clientPublic}`,
+        `Server 私有数=${serverPrivate}, 公开数=${serverPublic}`,
+        `Client 计算: ${serverPublic}^${clientPrivate} mod ${p} = ${clientShared}`,
+        `Server 计算: ${clientPublic}^${serverPrivate} mod ${p} = ${serverShared}`,
+        `共享秘密一致: ${clientShared === serverShared}`,
+        `再派生出应用密钥: HKDF(${clientShared}) -> ${toyKey}`,
+        "",
+        "这个 toy 例子只演示密钥协商形状，不提供真实安全性。"
+      ].join("\n");
+    }
+
+    document.getElementById("prevBtn").addEventListener("click", () => {
+      pause();
+      previous();
+    });
+    document.getElementById("nextBtn").addEventListener("click", () => {
+      pause();
+      next();
+    });
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      pause();
+      render(0);
+    });
+    document.getElementById("playBtn").addEventListener("click", play);
+    document.getElementById("runToyBtn").addEventListener("click", runToyHandshake);
+    document.getElementById("tls13Btn").addEventListener("click", () => {
+      mode = "tls13";
+      document.getElementById("tls13Btn").classList.add("active");
+      document.getElementById("tls12Btn").classList.remove("active");
+      render(stepIndex);
+    });
+    document.getElementById("tls12Btn").addEventListener("click", () => {
+      mode = "tls12";
+      document.getElementById("tls12Btn").classList.add("active");
+      document.getElementById("tls13Btn").classList.remove("active");
+      render(stepIndex);
+    });
+
+    createPackets();
+    createStepList();
+    render(0);
+  </script>
+</body>
+</html>
