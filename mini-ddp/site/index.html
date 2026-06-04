@@ -1,0 +1,816 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mini-ddp: 从第一性原理实现 DDP</title>
+  <style>
+    :root {
+      --ink: #151515;
+      --muted: #5d6470;
+      --line: #d9dee7;
+      --paper: #f7f7f3;
+      --panel: #ffffff;
+      --accent: #0f7b6c;
+      --accent-2: #d84f2a;
+      --accent-3: #3157a4;
+      --code: #20242b;
+      --code-ink: #f2f6ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    header {
+      min-height: 92vh;
+      display: grid;
+      align-items: center;
+      padding: 56px clamp(20px, 5vw, 72px) 30px;
+      background:
+        linear-gradient(120deg, rgba(15, 123, 108, .12), transparent 38%),
+        linear-gradient(300deg, rgba(216, 79, 42, .12), transparent 38%),
+        var(--paper);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.03fr) minmax(360px, .97fr);
+      gap: clamp(28px, 5vw, 72px);
+      align-items: center;
+      max-width: 1180px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(48px, 8vw, 96px);
+      line-height: .92;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 26px 0 0;
+      max-width: 660px;
+      color: #343941;
+      font-size: clamp(18px, 2vw, 23px);
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    a.button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 42px;
+      padding: 10px 16px;
+      border-radius: 6px;
+      color: white;
+      background: var(--ink);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    a.button.secondary {
+      color: var(--ink);
+      background: transparent;
+      border: 1px solid var(--ink);
+    }
+
+    .machine {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 22px 60px rgba(24, 28, 34, .10);
+    }
+
+    .rank-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .rank {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      background: #fbfcff;
+    }
+
+    .rank h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .layer {
+      height: 28px;
+      margin: 7px 0;
+      border-radius: 4px;
+      background: #dfe9e6;
+      border-left: 5px solid var(--accent);
+      font-size: 12px;
+      color: #26302e;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      font-weight: 700;
+    }
+
+    .bucket-row {
+      margin-top: 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .bucket {
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 7px 10px;
+      border-radius: 5px;
+      background: #f1efe7;
+      border: 1px solid #d8d1bd;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    main section {
+      padding: 76px clamp(20px, 5vw, 72px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: clamp(31px, 4.5vw, 56px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 780px;
+      color: var(--muted);
+      font-size: 18px;
+      margin: 0 0 34px;
+    }
+
+    .principles {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .principle {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      min-height: 190px;
+    }
+
+    .principle strong {
+      display: block;
+      font-size: 15px;
+      color: var(--accent-3);
+      margin-bottom: 10px;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .step {
+      display: contents;
+    }
+
+    .step .label {
+      padding-top: 14px;
+      color: var(--accent-2);
+      font-weight: 800;
+    }
+
+    .step .body {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+    }
+
+    .body h3 {
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 22px 0 0;
+      padding: 18px;
+      border-radius: 8px;
+      background: var(--code);
+      color: var(--code-ink);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .compare > div {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    ul {
+      margin: 12px 0 0;
+      padding-left: 20px;
+    }
+
+    li { margin: 8px 0; }
+
+    .callout {
+      background: #e9f3ef;
+      border-left: 5px solid var(--accent);
+      padding: 18px 20px;
+      border-radius: 6px;
+      max-width: 880px;
+    }
+
+    .question-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .question {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .question h3 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    .term {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #eef2fa;
+      color: #233f80;
+      font-weight: 800;
+    }
+
+    .equation {
+      margin: 18px 0;
+      padding: 16px 18px;
+      border-radius: 8px;
+      background: #fff7ea;
+      border: 1px solid #e4c991;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      color: #4a3414;
+      overflow-x: auto;
+    }
+
+    .code-note {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: minmax(260px, .95fr) minmax(280px, 1.05fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .code-note > div {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+
+    .code-note h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .code-note p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .code-note pre {
+      margin: 0;
+      height: 100%;
+    }
+
+    .ladder {
+      display: grid;
+      gap: 14px;
+      counter-reset: ladder;
+    }
+
+    .rung {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .rung::before {
+      counter-increment: ladder;
+      content: counter(ladder);
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--ink);
+      color: white;
+      font-weight: 900;
+    }
+
+    .rung h3 {
+      margin: 0 0 7px;
+      font-size: 20px;
+    }
+
+    .rung p {
+      margin: 0;
+    }
+
+    .glossary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .glossary div {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .glossary strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--accent-3);
+    }
+
+    footer {
+      padding: 38px clamp(20px, 5vw, 72px);
+      color: var(--muted);
+      background: #efeee8;
+    }
+
+    @media (max-width: 860px) {
+      header { min-height: auto; }
+      .hero, .principles, .compare, .question-grid, .glossary, .code-note {
+        grid-template-columns: 1fr;
+      }
+      .timeline {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+      .step { display: block; }
+      .step .label { padding: 20px 0 8px; }
+      .rank-grid { grid-template-columns: 1fr; }
+      .rung {
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 10px;
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="hero">
+      <div>
+        <h1>mini-ddp</h1>
+        <p class="subtitle">从一个最朴素的问题开始：如果一台机器训练太慢，能不能让几个“工人”各算一部分数据，最后得到和单个大批次训练一样的模型更新？这个网页会先解释每个新词，再对应到代码。</p>
+        <div class="hero-actions">
+          <a class="button" href="#why-rank">从工人编号开始</a>
+          <a class="button secondary" href="#run">运行验证</a>
+        </div>
+      </div>
+      <div class="machine" aria-label="DDP reducer visualization">
+        <div class="rank-grid">
+          <div class="rank">
+            <h3>工人 0：一份完整模型拷贝</h3>
+            <div class="layer">数字 A 的修改信号</div>
+            <div class="layer">数字 B 的修改信号</div>
+            <div class="layer">数字 C 的修改信号</div>
+          </div>
+          <div class="rank">
+            <h3>工人 1：一份完整模型拷贝</h3>
+            <div class="layer">数字 A 的修改信号</div>
+            <div class="layer">数字 B 的修改信号</div>
+            <div class="layer">数字 C 的修改信号</div>
+          </div>
+        </div>
+        <div class="bucket-row">
+          <div class="bucket"><span>一组修改信号准备好</span><span>求两个工人的平均</span></div>
+          <div class="bucket"><span>另一组修改信号准备好</span><span>写回每份模型拷贝</span></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="wrap">
+        <h2>先把词说清楚</h2>
+        <p class="lead">后面每个术语都只为解决一个具体问题出现。这里先给最小词典，避免把工程黑话当成解释。</p>
+        <div class="glossary">
+          <div>
+            <strong>参数</strong>
+            模型里会被训练改变的数字，比如线性层的权重。训练的结果，本质上就是这些数字被改成更合适的值。
+          </div>
+          <div>
+            <strong>梯度</strong>
+            每个参数应该往哪个方向改、改多少的信号。一次反向传播会为参数算出梯度。
+          </div>
+          <div>
+            <strong>模型副本</strong>
+            一份完整模型的拷贝。数据并行不是把模型切开，而是让多个完整副本看不同数据。
+          </div>
+          <div>
+            <strong>loss</strong>
+            损失值，表示模型这次预测错得有多严重。loss 越小，通常表示这批数据上预测越好。
+          </div>
+          <div>
+            <strong>反向传播</strong>
+            从 loss 往回计算每个参数梯度的过程。它回答“哪个参数该往哪个方向改”。
+          </div>
+          <div>
+            <strong>optimizer</strong>
+            优化器。它读取参数的梯度，然后真正修改参数，比如按学习率走一小步。
+          </div>
+          <div>
+            <strong>rank</strong>
+            工人的编号。rank 0、rank 1 就像“第 0 个工人”“第 1 个工人”，用于决定谁读哪份数据、谁负责发初始参数、通信时按什么顺序对齐。
+          </div>
+          <div>
+            <strong>bucket</strong>
+            梯度打包箱。它把多个参数的梯度放进一组，一次通信发一组，而不是每个小梯度都单独通信。
+          </div>
+          <div>
+            <strong>DDP</strong>
+            Distributed Data Parallel，分布式数据并行。意思是：数据分给多个工人，模型每个工人一份，梯度同步后一起更新。
+          </div>
+          <div>
+            <strong>hook</strong>
+            自动触发的小回调。这里指“某个梯度刚算出来时，自动通知同步管理器”。
+          </div>
+          <div>
+            <strong>PyTorch</strong>
+            一个常用深度学习框架。这里的代码用它来定义模型、计算梯度、运行优化器。
+          </div>
+          <div>
+            <strong>CPU 和 MPS</strong>
+            CPU 是普通处理器；MPS 是苹果芯片 GPU 的 PyTorch 加速接口。这个项目两种设备都能验证。
+          </div>
+          <div>
+            <strong>张量</strong>
+            多维数字数组。模型参数、输入数据和梯度在 PyTorch 里通常都是张量。
+          </div>
+          <div>
+            <strong>进程</strong>
+            操作系统里独立运行的一份程序。真实 DDP 通常让每个进程管理一个工人。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="why-rank">
+      <div class="wrap">
+        <h2>为什么要设计 rank？</h2>
+        <p class="lead">先不要想 PyTorch。想象你要把 1 万张图片交给 4 个工人训练。系统至少要回答四个问题：谁是第几个工人？谁处理哪一段数据？谁的初始模型说了算？大家通信时按什么顺序对齐？rank 就是这四个问题的共同坐标。</p>
+        <div class="question-grid">
+          <div class="question">
+            <h3>没有 rank 会怎样？</h3>
+            <p>如果所有工人都没有编号，大家可能重复拿同一批数据，也可能都以为自己该当“主工人”。训练会变成一群独立实验，而不是一个协同训练任务。</p>
+          </div>
+          <div class="question">
+            <h3>rank 解决了什么？</h3>
+            <p><span class="term">rank</span> 是稳定编号。rank 0 可以负责把初始参数发给别人；rank 1 可以拿第 2 份数据；所有工人都按 rank 顺序参与梯度平均。</p>
+          </div>
+          <div class="question">
+            <h3>为什么每个 rank 要有完整模型？</h3>
+            <p>因为这是数据并行：并行的是数据，不是模型结构。每个工人用完整模型看不同小批次，才能独立算出“这份数据希望模型怎么改”。</p>
+          </div>
+          <div class="question">
+            <h3>为什么 rank 0 的参数要广播？</h3>
+            <p>广播就是“一人发给所有人”。如果初始参数不同，后面即使平均梯度，大家也会从不同起点出发，无法保持同一个模型。</p>
+          </div>
+        </div>
+        <div class="code-note">
+          <div>
+            <h3>代码里 rank 是怎么被用上的？</h3>
+            <p>每次前向计算都显式传入 rank。这个编号决定调用哪一份模型副本；如果 rank 越界，代码直接报错，避免把数据送给不存在的工人。</p>
+          </div>
+          <pre><code>def forward(self, rank: int, *args, **kwargs):
+    if rank &lt; 0 or rank &gt;= self.world_size:
+        raise IndexError(...)
+    return self.replicas[rank](*args, **kwargs)</code></pre>
+        </div>
+        <div class="code-note">
+          <div>
+            <h3>rank 0 为什么能当初始参数来源？</h3>
+            <p>构造时先拷贝 rank 0 的状态，再加载到其他副本。这样所有工人从同一组参数数字开始，后面的梯度平均才有意义。</p>
+          </div>
+          <pre><code>source_state = {
+    key: value.detach().clone()
+    for key, value in self.replicas[0].state_dict().items()
+}
+for replica in self.replicas[1:]:
+    replica.load_state_dict(source_state)</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>为什么要同步梯度？</h2>
+        <p class="lead">每个工人只看一部分数据，所以它算出的梯度只是局部意见。我们想要的不是某个工人的意见，而是“所有数据合起来”的意见。</p>
+        <div class="equation">全体数据的更新方向 = 所有工人的本地梯度求平均</div>
+        <div class="principles">
+          <div class="principle">
+            <strong>第一步：切数据</strong>
+            一个大批次被切成几份，每个 rank 只拿自己的那份。这个动作叫数据分片，也就是把数据按工人编号分配。
+          </div>
+          <div class="principle">
+            <strong>第二步：各自反向传播</strong>
+            反向传播就是从 loss 回头算梯度。loss 是模型预测错了多少的数字，梯度说明参数该怎么改。
+          </div>
+          <div class="principle">
+            <strong>第三步：平均梯度</strong>
+            平均后，每个模型副本拿到同一份梯度。只要初始参数相同、更新规则相同，下一步参数仍然相同。
+          </div>
+        </div>
+        <div class="code-note">
+          <div>
+            <h3>先切数据，再各算各的 loss</h3>
+            <p>`shard_batch` 按第 0 维切开一个大批次。训练代码给每个 rank 一片数据，让每个模型副本独立算出自己的 loss。</p>
+          </div>
+          <pre><code>xs = shard_batch(x, ddp.world_size)
+ys = shard_batch(y, ddp.world_size)
+
+losses = [
+    F.cross_entropy(ddp(rank, xs[rank]), ys[rank])
+    for rank in range(ddp.world_size)
+]</code></pre>
+        </div>
+        <div class="code-note">
+          <div>
+            <h3>梯度平均发生在哪里？</h3>
+            <p>每个 rank 的同一个参数都有一份梯度。这里把它们搬到 CPU 上求平均，再写回每个副本的同名参数。</p>
+          </div>
+          <pre><code>grads = [
+    self.params_by_rank[rank][param_index].grad
+    for rank in range(self.world_size)
+]
+averaged = torch.stack([
+    grad.detach().to("cpu") for grad in grads
+]).mean(dim=0)</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>为什么要有 bucket？</h2>
+        <p class="lead">现在问题变成：模型可能有成千上万个参数张量，每个张量都有一个梯度。同步这些梯度时，是一个一个发，还是全部攒到最后发？两个极端都不好。</p>
+        <div class="question-grid">
+          <div class="question">
+            <h3>如果每个梯度单独通信</h3>
+            <p>小消息太多。每次通信都有固定开销，像寄一万封很薄的信，邮费和排队时间会淹没真正内容。</p>
+          </div>
+          <div class="question">
+            <h3>如果所有梯度攒成一个超大包</h3>
+            <p>要等最后一个梯度算完才能开始通信。这样反向传播期间网络闲着，最后大家一起等一个大包传完。</p>
+          </div>
+          <div class="question">
+            <h3>bucket 是中间方案</h3>
+            <p><span class="term">bucket</span> 是“梯度打包箱”：把相邻的一组梯度凑成适中大小。某个打包箱装满并且里面的梯度都算好了，就可以先同步这一箱。</p>
+          </div>
+          <div class="question">
+            <h3>为什么这能更快？</h3>
+            <p>反向传播还在继续算前面层的梯度时，后面层的 bucket 已经可以开始通信。计算和通信重叠，等待时间就少了。</p>
+          </div>
+        </div>
+        <div class="callout">
+          所以 bucket 不是数学概念，而是系统设计概念：它不改变“平均梯度”的结果，只改变“什么时候、以多大粒度通信”。
+        </div>
+        <div class="code-note">
+          <div>
+            <h3>bucket 在代码里只是参数下标分组</h3>
+            <p>`parameter_indices` 记录这一箱包含哪些参数。`bytes` 记录这一箱大概多大，用来解释为什么要受 `bucket_cap_mb` 控制。</p>
+          </div>
+          <pre><code>@dataclass(frozen=True)
+class Bucket:
+    index: int
+    parameter_indices: tuple[int, ...]
+    bytes: int</code></pre>
+        </div>
+        <div class="code-note">
+          <div>
+            <h3>为什么按大小装箱？</h3>
+            <p>代码从后往前扫描参数，当前箱子超过容量上限就开新箱。生产 DDP 也是为了让反向传播后面先出现的梯度尽早凑箱通信。</p>
+          </div>
+          <pre><code>for param_index in reversed(range(len(reference_params))):
+    param_bytes = _tensor_nbytes(reference_params[param_index])
+    if current and current_bytes + param_bytes &gt; cap_bytes:
+        buckets_reversed.append(current)
+        current = []
+        current_bytes = 0
+    current.append(param_index)</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="implementation">
+      <div class="wrap">
+        <h2>从设计映射到代码</h2>
+        <p class="lead">`mini-ddp` 把真实多进程通信收缩到一个进程里的多个模型副本。这样 CPU 和 MPS 都能跑，读者可以专心看清楚 DDP 的语义。</p>
+        <div class="ladder">
+          <div class="rung">
+            <div>
+              <h3>创建多个模型副本</h3>
+              <p>`MiniDDP.__init__` 深拷贝出 `world_size` 份模型。`world_size` 是工人总数，也就是 rank 的数量。</p>
+            </div>
+          </div>
+          <div class="rung">
+            <div>
+              <h3>把 rank 0 的参数发给所有副本</h3>
+              <p>`broadcast_parameters_and_buffers()` 保证所有副本从同一个模型开始。buffer 是模型里不由梯度更新、但也要同步的状态，比如某些归一化层保存的运行统计数字。</p>
+            </div>
+          </div>
+          <div class="rung">
+            <div>
+              <h3>给每个参数放一个自动提醒</h3>
+              <p>自动提醒就是 PyTorch 自动求导系统里的 hook：当某个参数的梯度被反向传播算出来时，hook 会记录“这个 rank 的这个参数已经 ready”。ready 的意思是“可以用于同步了”。</p>
+            </div>
+          </div>
+          <div class="rung">
+            <div>
+              <h3>按 bucket 检查梯度是否到齐</h3>
+              <p>`MiniReducer.synchronize()` 逐个 bucket 检查：这个打包箱里，每个 rank 的每个参数梯度都到了吗？没到就报错，避免悄悄用缺失梯度更新。</p>
+            </div>
+          </div>
+          <div class="rung">
+            <div>
+              <h3>平均梯度并写回</h3>
+              <p>对同一个参数，把所有 rank 的梯度取平均，再写回每个副本的 `param.grad`。`param.grad` 是 PyTorch optimizer 会读取的梯度位置。</p>
+            </div>
+          </div>
+        </div>
+        <div class="code-note">
+          <div>
+            <h3>hook 把“梯度已产生”变成事件</h3>
+            <p>注册 hook 后，只要某个参数的梯度被算出来，`_ready` 就会记录这个 rank 和参数下标。后面同步时用它检查 bucket 是否真的到齐。</p>
+          </div>
+          <pre><code>def _make_hook(self, rank: int, param_index: int):
+    def hook(grad: Tensor) -&gt; Tensor:
+        bucket_index = self.param_to_bucket[param_index]
+        self._ready.setdefault(bucket_index, set()).add(
+            (rank, param_index)
+        )
+        return grad
+    return hook</code></pre>
+        </div>
+        <div class="code-note">
+          <div>
+            <h3>同步前先证明 bucket 完整</h3>
+            <p>这个检查是教学实现里很重要的一步：如果某个参数没有参与反向传播，不会静默平均一个缺失的梯度，而是直接告诉你缺了谁。</p>
+          </div>
+          <pre><code>expected = {
+    (rank, param_index)
+    for rank in range(self.world_size)
+    for param_index in bucket.parameter_indices
+}
+missing = expected - self._ready.get(bucket.index, set())
+if missing:
+    raise RuntimeError(...)</code></pre>
+        </div>
+        <pre><code>xs = shard_batch(x, world_size=2)
+losses = [
+    loss(model_copy_for_rank_0(xs[0])),
+    loss(model_copy_for_rank_1(xs[1])),
+]
+ddp.backward(losses)
+
+# 现在两个模型副本的 param.grad 已经相同
+optimizer_for_rank_0.step()
+optimizer_for_rank_1.step()</code></pre>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>mini-ddp 和 PyTorch DDP 的边界</h2>
+        <div class="compare">
+          <div>
+            <h3>真实 PyTorch DDP</h3>
+            <ul>
+              <li>通常一个进程管理一个设备上的一个模型副本。</li>
+              <li>ProcessGroup 是通信小组，负责让不同进程互相发送参数和梯度。</li>
+              <li>all-reduce 是“所有人贡献一个张量，所有人拿到聚合结果”的通信动作。DDP 用它来求平均梯度。</li>
+              <li>Reducer 是梯度同步管理器，负责 bucket、hook、通信顺序和写回梯度。</li>
+            </ul>
+          </div>
+          <div>
+            <h3>这个教学实现</h3>
+            <ul>
+              <li>一个进程里放多个模型副本，避免安装和启动真实分布式后端。</li>
+              <li>用 Python 张量平均模拟 all-reduce 的平均值，保留数学效果。</li>
+              <li>保留 hook 和 bucket ready 检查，但不实现异步通信重叠。</li>
+              <li>可以在 CPU 或 Apple MPS 上验证，适合逐行阅读。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="run">
+      <div class="wrap">
+        <h2>运行验证</h2>
+        <p class="lead">测试做两件事：第一，证明 mini-ddp 的一次更新等价于单模型看完整大批次；第二，证明每个梯度打包箱里的梯度都会被 hook 标记为 ready。</p>
+        <pre><code>cd /Users/siancao/work/ai/research/mini-ddp
+uv run --extra dev pytest
+uv run mini-ddp-demo --device cpu
+uv run mini-ddp-demo --device auto</code></pre>
+        <div class="callout">
+          读代码时抓住一个问题：`loss.backward()` 本身只负责反向传播。DDP 的关键，是提前给参数注册 hook，让“梯度刚算出来”这个时刻变成同步梯度的触发点。
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>资料锚点</h2>
+        <p class="lead">这个教学实现对齐的是 PyTorch DDP 的公开设计说明、API 文档和源码入口。完整调研笔记在 <code>docs/research.md</code>。</p>
+        <div class="compare">
+          <div>
+            <h3>官方设计</h3>
+            <ul>
+              <li><a href="https://docs.pytorch.org/docs/2.12/notes/ddp.html">分布式数据并行设计说明</a></li>
+              <li><a href="https://docs.pytorch.org/tutorials/intermediate/ddp_tutorial.html">分布式数据并行入门教程</a></li>
+              <li><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html">DistributedDataParallel 函数接口文档</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>实现入口</h3>
+            <ul>
+              <li><a href="https://github.com/pytorch/pytorch/blob/main/torch/nn/parallel/distributed.py">torch/nn/parallel/distributed.py</a></li>
+              <li><a href="https://github.com/pytorch/pytorch/blob/main/torch/csrc/distributed/c10d/reducer.cpp">torch/csrc/distributed/c10d/reducer.cpp</a></li>
+              <li><a href="https://arxiv.org/abs/2006.15704">PyTorch 分布式训练论文</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    mini-ddp 是教学实现：保留分布式数据并行的数学语义，不复刻生产系统的性能工程。
+  </footer>
+</body>
+</html>
