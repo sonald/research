@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mini activation checkpointing</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#lab" aria-label="mini activation checkpointing">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>mini-act-checkpointing</span>
+      </a>
+      <nav class="nav" aria-label="章节">
+        <a href="#lab">实验台</a>
+        <a href="#why">为什么</a>
+        <a href="#impl">实现</a>
+        <a href="#hooks">生产版</a>
+        <a href="#judge">判读</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="lab section-band" id="lab">
+        <div class="lab-copy">
+          <p class="chapter-index">01 / 交互实验台</p>
+          <h1>Forward 少存，<br />Backward 重算</h1>
+          <p>
+            Activation checkpointing 的核心不是“保存 checkpoint 文件”，而是训练时少保存中间激活。
+            下面这个小实验会把普通 autograd、checkpoint forward、backward recompute 放在同一张图里。
+          </p>
+
+          <div class="control-strip" aria-label="流程阶段">
+            <button class="stage-button is-active" data-stage="normal">普通 forward</button>
+            <button class="stage-button" data-stage="checkpoint">checkpoint forward</button>
+            <button class="stage-button" data-stage="backward">backward 重算</button>
+          </div>
+
+          <div class="range-grid">
+            <label>
+              <span>层数</span>
+              <input id="layerCount" type="range" min="4" max="12" value="8" />
+            </label>
+            <label>
+              <span>checkpoint 区间</span>
+              <input id="spanEnd" type="range" min="2" max="12" value="6" />
+            </label>
+          </div>
+        </div>
+
+        <div class="lab-visual" aria-label="checkpoint 流程 SVG 演示">
+          <svg id="flowSvg" viewBox="0 0 920 520" role="img"></svg>
+          <div class="metric-row">
+            <div>
+              <span class="metric-label">forward 保存</span>
+              <strong id="savedCount">0 tensors</strong>
+            </div>
+            <div>
+              <span class="metric-label">额外计算</span>
+              <strong id="computeCost">1.0x</strong>
+            </div>
+            <div>
+              <span class="metric-label">关键动作</span>
+              <strong id="stageAction">保存所有激活</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-band split" id="why">
+        <article>
+          <p class="chapter-index">02 / 从 autograd 开始</p>
+          <h2>默认 autograd 为什么吃显存</h2>
+          <p>
+            backward 公式常常需要 forward 的输入或输出。比如 `sin(x)` 的反向要用 `x`，
+            `linear(x, w)` 的反向要用 `x` 和 `w`。所以 eager autograd 会沿着 forward 一路保存张量，
+            峰值通常出现在 backward 开始之前。
+          </p>
+          <div class="code-note">
+            <pre><code>y = block(x)
+loss = y.square().mean()
+loss.backward()</code></pre>
+            <p>
+              普通 forward 会把 `block` 内部反向需要的激活挂在 graph 上。省事，但深模型会把激活堆到很高。
+            </p>
+          </div>
+        </article>
+        <figure class="diagram-panel">
+          <svg id="tapeSvg" viewBox="0 0 720 420" role="img"></svg>
+          <figcaption>黑色箭头是数据流，彩色竖条是被 autograd 保存到 backward 的激活。</figcaption>
+        </figure>
+      </section>
+
+      <section class="section-band split reverse">
+        <article>
+          <p class="chapter-index">03 / checkpoint 的交换</p>
+          <h2>只保存边界输入，把内部激活留到 backward 再造</h2>
+          <p>
+            checkpoint 区域的 forward 用 `torch.no_grad()` 包起来。内部算子照常产生结果，
+            但 autograd 不记录内部 graph，也就不会保存那些中间激活。代价是 backward 时要重跑一遍区域。
+          </p>
+          <div class="code-note">
+            <pre><code>with torch.no_grad():
+    y = run_fn(x)       # 不保存内部激活
+
+# backward:
+with torch.enable_grad():
+    y2 = run_fn(x_detached)
+torch.autograd.backward(y2, grad_y)</code></pre>
+            <p>
+              反向里重算出的 `y2` 不是为了当输出，而是为了重新生成一个局部 graph，让 autograd 算梯度。
+            </p>
+          </div>
+        </article>
+        <figure class="diagram-panel">
+          <svg id="recomputeSvg" viewBox="0 0 720 430" role="img"></svg>
+          <figcaption>checkpoint 不消灭计算，它把一部分 forward 从训练前半段搬到 backward 里。</figcaption>
+        </figure>
+      </section>
+
+      <section class="section-band lab-mini">
+        <div>
+          <p class="chapter-index">04 / 随机数不是小事</p>
+          <h2>dropout mask 必须在重算时复现</h2>
+          <p>
+            如果 checkpoint forward 和 backward recompute 用了不同 dropout mask，同一个数学图就变成了两个图。
+            这就是 PyTorch 默认要 stash/restore RNG state 的原因。
+          </p>
+          <label class="toggle">
+            <input id="rngToggle" type="checkbox" checked />
+            <span>preserve_rng_state</span>
+          </label>
+        </div>
+        <figure class="diagram-panel">
+          <svg id="rngSvg" viewBox="0 0 760 360" role="img"></svg>
+          <figcaption id="rngCaption">保存 RNG 时，两次 mask 对齐，梯度对应同一次 forward。</figcaption>
+        </figure>
+      </section>
+
+      <section class="section-band split" id="impl">
+        <article>
+          <p class="chapter-index">05 / 实现拆解</p>
+          <h2>一个教学版 checkpoint 需要四个零件</h2>
+          <ol class="step-list">
+            <li>把 `args/kwargs` 里的 tensor leaf 摘出来，非 tensor 常量留在 tree spec 里。</li>
+            <li>forward 保存 tensor inputs 与 RNG，然后 `no_grad` 跑 function。</li>
+            <li>backward 里 detach inputs，按原 tree spec 还原调用参数。</li>
+            <li>恢复 RNG、重跑 function、把外部传来的 `grad_outputs` 接给重算 outputs。</li>
+          </ol>
+          <div class="code-tabs" aria-label="代码片段">
+            <button class="tab is-active" data-code="flatten">flatten</button>
+            <button class="tab" data-code="forward">forward</button>
+            <button class="tab" data-code="backward">backward</button>
+            <button class="tab" data-code="rng">RNG</button>
+          </div>
+          <pre class="code-window"><code id="codeWindow"></code></pre>
+        </article>
+        <figure class="diagram-panel">
+          <svg id="pytreeSvg" viewBox="0 0 720 430" role="img"></svg>
+          <figcaption>tree spec 负责把 Python 结构和 tensor leaves 分开，这样 autograd.Function 只接 tensor。</figcaption>
+        </figure>
+      </section>
+
+      <section class="section-band split reverse" id="hooks">
+        <article>
+          <p class="chapter-index">06 / PyTorch 生产版桥段</p>
+          <h2>non-reentrant 用 hooks，不是简单 backward 重跑全部</h2>
+          <p>
+            PyTorch 当前推荐 `use_reentrant=False`。它的关键是 saved tensor hooks：
+            forward 仍然记录 graph，但把本该保存的大 tensor 换成 holder；等 backward 真要解包某个 tensor，
+            holder 才触发 recompute。拿到足够 tensor 后可以 early stop。
+          </p>
+          <div class="source-list">
+            <a href="https://docs.pytorch.org/docs/2.12/checkpoint.html">PyTorch docs</a>
+            <a href="https://github.com/pytorch/pytorch/blob/main/torch/utils/checkpoint.py">checkpoint.py source</a>
+            <a href="https://pytorch.org/blog/activation-checkpointing-techniques/">PyTorch blog</a>
+          </div>
+        </article>
+        <figure class="diagram-panel">
+          <svg id="hooksSvg" viewBox="0 0 760 430" role="img"></svg>
+          <figcaption>holder 是“以后需要时再重算”的占位，不是保存一份压缩激活。</figcaption>
+        </figure>
+      </section>
+
+      <section class="section-band" id="judge">
+        <div class="section-heading">
+          <p class="chapter-index">07 / 代码判读</p>
+          <h2>读 checkpoint 代码时，先判断这句在保护什么</h2>
+        </div>
+        <div class="judge-grid">
+          <article class="judge-item" data-answer="true">
+            <pre><code>with torch.no_grad():
+    outputs = run_fn(*args)</code></pre>
+            <h3>判断：这是为了不保存 checkpoint 区域内部激活？</h3>
+            <div class="choice-row">
+              <button data-choice="true">对</button>
+              <button data-choice="false">错</button>
+            </div>
+            <p class="judge-feedback"></p>
+          </article>
+          <article class="judge-item" data-answer="false">
+            <pre><code>saved_inputs = ctx.saved_tensors
+detached = x.detach().requires_grad_(True)</code></pre>
+            <h3>判断：detach 会切断最终输入梯度，所以不能用？</h3>
+            <div class="choice-row">
+              <button data-choice="true">对</button>
+              <button data-choice="false">错</button>
+            </div>
+            <p class="judge-feedback"></p>
+          </article>
+          <article class="judge-item" data-answer="true">
+            <pre><code>torch.autograd.backward(
+    recomputed_outputs,
+    grad_outputs,
+)</code></pre>
+            <h3>判断：这里是在重算出来的局部 graph 上求输入和参数梯度？</h3>
+            <div class="choice-row">
+              <button data-choice="true">对</button>
+              <button data-choice="false">错</button>
+            </div>
+            <p class="judge-feedback"></p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-band final-grid">
+        <article>
+          <p class="chapter-index">08 / 取舍地图</p>
+          <h2>省显存不是免费午餐</h2>
+          <p>
+            checkpoint 的收益取决于“激活有多大”和“重算有多贵”。Transformer block 这类深而规整的区域很适合；
+            如果区域里有副作用、全局状态变化、随机数未回放、或者重算比保存还贵，就要小心。
+          </p>
+        </article>
+        <figure class="diagram-panel">
+          <svg id="tradeoffSvg" viewBox="0 0 760 420" role="img"></svg>
+          <figcaption>越往左越省内存，越往上额外计算越多。checkpoint 是可调旋钮，不是单点答案。</figcaption>
+        </figure>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
