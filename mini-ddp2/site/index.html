@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mini-ddp2 - 从 0 实现 DDP</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">D</span><span>mini-ddp2</span></div>
+      <nav aria-label="章节导航">
+        <a href="#baseline">Baseline</a>
+        <a href="#replicas">Replicas</a>
+        <a href="#reducer">Reducer</a>
+        <a href="#sync">Sync</a>
+        <a href="#verify">Verify</a>
+      </nav>
+    </header>
+
+    <div class="layout">
+      <aside class="toc" aria-label="目录">
+        <p class="toc-title">学习路径</p>
+        <a href="#baseline" class="active">1. 单模型训练前提</a>
+        <a href="#replicas">2. rank 与 replica</a>
+        <a href="#broadcast">3. rank 0 broadcast</a>
+        <a href="#autograd">4. autograd hook</a>
+        <a href="#reducer">5. Reducer bucket</a>
+        <a href="#sync">6. all-reduce mean</a>
+        <a href="#optimizer">7. 本地 optimizer</a>
+        <a href="#nosync">8. no_sync 梯度累积</a>
+        <a href="#unused">9. unused 参数</a>
+        <a href="#verify">10. CPU/MPS 验证</a>
+        <div class="progress" aria-hidden="true"><span></span></div>
+      </aside>
+
+      <main class="content">
+        <section class="hero">
+          <h1>从一轮普通 backward 开始，自己实现一个 DDP。</h1>
+          <p>
+            这不是 PyTorch API 速查，也不是分布式训练黑盒说明。目标是把每个前提拆开：
+            为什么要复制模型，为什么要先 broadcast，为什么 hook 能知道梯度 ready，
+            为什么 bucket 不改变数学结果，为什么 all-reduce mean 后本地 optimizer 仍然正确。
+          </p>
+          <div class="quick-grid">
+            <div class="quick-card">
+              <strong>代码能跑</strong>
+              <span>单进程模拟多个 rank，CPU 默认可测，MPS 可用时自动 smoke test。</span>
+            </div>
+            <div class="quick-card">
+              <strong>机制完整</strong>
+              <span>包含 broadcast、hook、bucket、all-reduce、writeback、no_sync、unused 参数。</span>
+            </div>
+            <div class="quick-card">
+              <strong>对齐 PyTorch</strong>
+              <span>保留 DDP 语义骨架，明确标出没有复刻的生产性能路径。</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="baseline" class="chapter">
+          <h2>1. 先固定单模型训练的参照物</h2>
+          <p class="lead">
+            学 DDP 前要先把“普通一步训练”说清楚。否则后面谈 replica、rank、all-reduce 时，
+            很容易忘记我们到底要和什么结果保持一致。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/01-large-batch-baseline.png" alt="单模型大 batch 训练基线图" />
+            <figcaption>单模型路径：完整 batch 进入 forward，loss.backward 产生梯度，optimizer.step 更新参数。</figcaption>
+          </figure>
+
+          <div class="explain-grid">
+            <div>
+              <h3>普通训练的一步</h3>
+              <p>
+                一个 PyTorch module 的参数存在 `model.parameters()` 里。forward 只负责计算输出；
+                loss 把输出和 label 变成一个标量；`loss.backward()` 沿 autograd graph 反向传播，
+                把每个叶子参数的梯度写入 `param.grad`；optimizer 读取 `param.grad` 并更新参数。
+              </p>
+              <p>
+                DDP 的正确性目标不是“看起来用了很多设备”，而是：如果把一个大 batch 切成多个 shard，
+                多个 replica 合作训练后，参数更新应当等价于单模型直接训练这个完整 batch。
+              </p>
+            </div>
+            <div class="invariant">
+              <strong>第一个不变量</strong>
+              <p>
+                对 mean reduction loss 和等大小 shard 来说，DDP 平均各 rank 的本地梯度，
+                应该得到单模型完整 batch 的平均梯度。
+              </p>
+            </div>
+          </div>
+
+          <div class="code-block">
+            <div class="code-title"><span>single-model baseline</span><button class="copy-btn">Copy</button></div>
+            <pre><code>opt.zero_grad(set_to_none=True)
+loss = F.cross_entropy(model(x_full_batch), y_full_batch)
+loss.backward()
+opt.step()</code></pre>
+          </div>
+
+          <div class="math">
+grad_large_batch = gradient(mean(loss(example_i) for example_i in full_batch))
+          </div>
+        </section>
+
+        <section id="replicas" class="chapter">
+          <h2>2. 数据并行从 rank 和 replica 开始</h2>
+          <p class="lead">
+            DDP 的基本结构是多份完整模型副本。每个 rank 处理不同数据 shard，
+            但所有 rank 在同一步训练中必须维护同一套参数语义。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/02-data-parallel-replicas.png" alt="batch 被切成多个 rank-local shard 的图" />
+            <figcaption>每个 rank 有完整 replica，但只接收 batch 的一部分。</figcaption>
+          </figure>
+
+          <h3>三个术语必须先区分</h3>
+          <div class="trace">
+            <div class="trace-row"><b>rank</b><span>一个参与训练的 worker 编号。在本项目里是同一进程中的一个 replica 槽位。</span></div>
+            <div class="trace-row"><b>world size</b><span>rank 总数。`world_size=2` 表示有 rank 0 和 rank 1。</span></div>
+            <div class="trace-row"><b>replica</b><span>完整模型副本。数据并行复制模型，不切模型层。</span></div>
+          </div>
+
+          <p>
+            `mini-ddp2` 为了教学不用多进程，而是在一个 Python 进程里 deep-copy 出多个 replica。
+            这让我们可以在 CPU 或 MPS 上检查每个 rank 的参数和梯度，不必先处理 `torchrun`、端口、环境变量和 backend。
+          </p>
+
+          <div class="code-block">
+            <div class="code-title"><span>replica construction</span><button class="copy-btn">Copy</button></div>
+            <pre><code>self.replicas = nn.ModuleList(
+    [copy.deepcopy(module).to(self.device) for _ in range(world_size)]
+)</code></pre>
+          </div>
+
+          <div class="warning">
+            <strong>不要把 replica 理解成模型切片</strong>
+            <p>
+              DDP 是 data parallel。每个 rank 都有完整模型。如果你把模型层切到不同设备上，
+              那是 model parallel 或 pipeline parallel 的问题。
+            </p>
+          </div>
+        </section>
+
+        <section id="broadcast" class="chapter">
+          <h2>3. 为什么构造阶段必须从 rank 0 broadcast</h2>
+          <p class="lead">
+            如果两个 replica 的初始参数不同，那么即使之后每轮梯度完全相同，它们也会沿着不同起点更新。
+            所以 DDP 的第一个动作是统一初始状态。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/03-rank0-broadcast.png" alt="rank 0 state_dict 广播给其他 rank 的图" />
+            <figcaption>rank 0 的 state_dict 是源。parameter 和 buffer 都要同步。</figcaption>
+          </figure>
+
+          <h3>parameter 和 buffer 都属于训练状态</h3>
+          <p>
+            `state_dict()` 不只包含 `nn.Parameter`。像 BatchNorm 的 `running_mean`、`running_var`
+            这类不会通过 optimizer 更新的 tensor 也在里面，它们是 buffer。生产 DDP 默认会在 forward 前广播 buffer，
+            避免各 rank 的统计状态长期分叉。
+          </p>
+
+          <div class="code-block">
+            <div class="code-title"><span>InMemoryProcessGroup.broadcast_state_dict</span><button class="copy-btn">Copy</button></div>
+            <pre><code>source = {
+    name: value.detach().clone()
+    for name, value in replicas[source_rank].state_dict().items()
+}
+for rank, replica in enumerate(replicas):
+    if rank != source_rank:
+        replica.load_state_dict(source)</code></pre>
+          </div>
+
+          <div class="invariant">
+            <strong>第二个不变量</strong>
+            <p>
+              同步梯度只能保证“从同一个点出发继续同步”。它不能修复“起点本来就不同”的 replica。
+            </p>
+          </div>
+        </section>
+
+        <section id="autograd" class="chapter">
+          <h2>4. hook 是 DDP 接入 autograd 的入口</h2>
+          <p class="lead">
+            用户没有在每个参数上手动调用通信。DDP 能工作，是因为它提前把 hook 注册到每个参数的梯度累加路径上。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/04-autograd-hooks.png" alt="autograd 产生梯度并触发 hook 的图" />
+            <figcaption>当某个参数的梯度 ready，hook 被触发，Reducer 记录这个 ready 事件。</figcaption>
+          </figure>
+
+          <h3>hook 的职责很小，但位置很关键</h3>
+          <p>
+            hook 不负责计算梯度。梯度由 autograd 计算。hook 只是在梯度出现的那一刻得到一次通知。
+            真实 DDP 的 Reducer 用这个通知判断 bucket 何时可以通信。`mini-ddp2` 也保留这个事件流，
+            只是把异步通信简化成 backward 结束后的同步处理。
+          </p>
+
+          <div class="code-block">
+            <div class="code-title"><span>register parameter hooks</span><button class="copy-btn">Copy</button></div>
+            <pre><code>def _make_hook(self, rank: int, param_index: int):
+    def hook(grad: Tensor) -> Tensor:
+        bucket_index = self.param_to_bucket[param_index]
+        self._ready[bucket_index].add((rank, param_index))
+        return grad
+    return hook
+
+param.register_hook(self._make_hook(rank, param_index))</code></pre>
+          </div>
+
+          <div class="trace">
+            <div class="trace-row"><b>prepare</b><span>清空上一轮的 ready 状态。</span></div>
+            <div class="trace-row"><b>backward</b><span>每个 rank 的 loss 调用 PyTorch autograd。</span></div>
+            <div class="trace-row"><b>hook</b><span>某个参数产生梯度，Reducer 标记 `(rank, parameter)` ready。</span></div>
+          </div>
+        </section>
+
+        <section id="reducer" class="chapter">
+          <h2>5. Reducer bucket 改变通信粒度，不改变数学</h2>
+          <p class="lead">
+            对每个参数单独通信会很碎。DDP 把多个参数的梯度放进 bucket，
+            等 bucket 内所有梯度都 ready 后，把它们 flatten 成一段连续 tensor 做通信。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/05-reducer-buckets.png" alt="参数被组织成 reducer bucket 的图" />
+            <figcaption>bucket 是通信调度结构。它让多个小梯度合并成一次 collective。</figcaption>
+          </figure>
+
+          <h3>为什么从参数尾部开始打包</h3>
+          <p>
+            神经网络 backward 的 ready 顺序通常和 forward 相反：最后几层参数更早产生梯度。
+            真实 DDP 的 bucket 设计会考虑反向传播顺序，让早 ready 的 bucket 尽早通信。
+            `mini-ddp2` 不实现异步 overlap，但仍然按反向参数顺序构造 bucket，让教学结构贴近真实机制。
+          </p>
+
+          <div class="code-block">
+            <div class="code-title"><span>bucket construction</span><button class="copy-btn">Copy</button></div>
+            <pre><code>for param_index in reversed(range(len(reference_params))):
+    param_bytes = param.numel() * param.element_size()
+    if current and current_bytes + param_bytes > cap_bytes:
+        reversed_buckets.append(current)
+        current = []
+        current_bytes = 0
+    current.append(param_index)</code></pre>
+          </div>
+
+          <div class="note">
+            <strong>bucket ready 的判定</strong>
+            <p>
+              对 bucket 中每个参数，都必须看到所有 rank 的 hook 事件。否则 Reducer 无法保证同一个 flatten tensor
+              在所有 rank 上有相同结构。
+            </p>
+          </div>
+        </section>
+
+        <section id="sync" class="chapter">
+          <h2>6. all-reduce mean 把本地梯度变成全局平均梯度</h2>
+          <p class="lead">
+            每个 rank 的 gradient 来自本地 shard。DDP 同步的不是参数，而是梯度。
+            同步后的 `param.grad` 在所有 rank 上相同。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/06-all-reduce-mean.png" alt="rank-local 梯度 all-reduce mean 并写回 param.grad 的图" />
+            <figcaption>all-reduce mean：先汇总各 rank 的 bucket 梯度，再除以 world size，最后写回每个 rank。</figcaption>
+          </figure>
+
+          <div class="math">
+grad_synced[p] = (grad_rank0[p] + grad_rank1[p] + ... + grad_rankN[p]) / world_size
+          </div>
+
+          <p>
+            `mini-ddp2` 在 `synchronize()` 中先找出一个 bucket 的 active 参数，把每个 rank 的对应梯度 flatten。
+            `InMemoryProcessGroup.all_reduce_mean()` 返回平均后的 flat tensor，然后再按原梯度 shape unflatten，
+            写回每个 rank 的 `param.grad`。
+          </p>
+
+          <div class="code-block">
+            <div class="code-title"><span>flatten, average, write back</span><button class="copy-btn">Copy</button></div>
+            <pre><code>flat_grads_by_rank = [
+    flatten(rank_grads_for_bucket)
+    for rank in range(world_size)
+]
+averaged_flat = process_group.all_reduce_mean(flat_grads_by_rank)
+averaged_grads = unflatten_like(averaged_flat, templates)
+
+for rank in range(world_size):
+    for param, averaged_grad in bucket_params:
+        param.grad = averaged_grad.clone()</code></pre>
+          </div>
+
+          <div class="invariant">
+            <strong>第三个不变量</strong>
+            <p>
+              optimizer step 前，各 replica 的参数相同，`param.grad` 也相同。
+            </p>
+          </div>
+        </section>
+
+        <section id="optimizer" class="chapter">
+          <h2>7. 为什么每个 rank 仍然只需要本地 optimizer</h2>
+          <p class="lead">
+            DDP 没有发明一个全局 optimizer。每个 rank 都运行普通 optimizer。
+            正确性来自参数、梯度和 optimizer state 的同步不变量。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/07-local-optimizer-step.png" alt="每个 rank 用相同梯度执行本地 optimizer step 的图" />
+            <figcaption>如果 step 前参数和梯度相同，本地 optimizer 会得到相同的新参数。</figcaption>
+          </figure>
+
+          <div class="code-block">
+            <div class="code-title"><span>local optimizers</span><button class="copy-btn">Copy</button></div>
+            <pre><code>opts = [torch.optim.SGD(replica.parameters(), lr=0.1)
+        for replica in ddp.replicas]
+
+for opt in opts:
+    opt.step()
+
+ddp.assert_replicas_equal()</code></pre>
+          </div>
+
+          <p>
+            这里有一个常见误解：DDP 不是先让每个 rank 更新参数，然后再平均参数。
+            DDP 的主路径是平均梯度，然后每个 rank 本地更新。平均参数会改变 optimizer state 的语义，
+            尤其是 momentum、Adam 的一阶二阶矩估计等状态。
+          </p>
+        </section>
+
+        <section id="nosync" class="chapter">
+          <h2>8. no_sync 只是跳过通信，不是跳过 backward</h2>
+          <p class="lead">
+            梯度累积时，我们希望多个 microbatch 的梯度先累到本地 `.grad`，
+            等到最后一个 microbatch 再通信。`no_sync()` 就是这个开关。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/08-no-sync-accumulation.png" alt="no_sync 梯度累积时间线图" />
+            <figcaption>no_sync 阶段 autograd 仍然写入本地 grad，只是 Reducer 不做 all-reduce。</figcaption>
+          </figure>
+
+          <div class="code-block">
+            <div class="code-title"><span>gradient accumulation with no_sync</span><button class="copy-btn">Copy</button></div>
+            <pre><code>for opt in opts:
+    opt.zero_grad(set_to_none=True)
+
+with ddp.no_sync():
+    losses = [loss_for_rank(rank, microbatch_1) for rank in range(world_size)]
+    ddp.backward(losses)  # local grad accumulates, communication is skipped
+
+losses = [loss_for_rank(rank, microbatch_2) for rank in range(world_size)]
+ddp.backward(losses)      # accumulated local grads are averaged now
+
+for opt in opts:
+    opt.step()</code></pre>
+          </div>
+
+          <div class="warning">
+            <strong>前提不能省略</strong>
+            <p>
+              如果你在 `no_sync()` 后错误地 `zero_grad()`，前一个 microbatch 的本地梯度就被清掉了。
+              如果你永远不再执行同步 backward，各 rank 只会保留自己的本地梯度。
+            </p>
+          </div>
+        </section>
+
+        <section id="unused" class="chapter">
+          <h2>9. unused parameter 和分叉控制流是 DDP 的高频坑</h2>
+          <p class="lead">
+            Reducer 期待所有 rank 对同一个 bucket 有相同结构的梯度。
+            参数没用到并不总是错误，但 rank 之间使用图不一致一定危险。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/09-unused-parameters.png" alt="unused parameter 和 rank divergent branch 对比图" />
+            <figcaption>所有 rank 都不用某参数时可以跳过；只有部分 rank 使用时，bucket 结构不再对齐。</figcaption>
+          </figure>
+
+          <h3>两种情况要分开</h3>
+          <div class="trace">
+            <div class="trace-row"><b>全局 unused</b><span>同一个参数在每个 rank 都没梯度。教学版可以在 `allow_unused_parameters=True` 下跳过。</span></div>
+            <div class="trace-row"><b>rank 分叉</b><span>某参数只在一部分 rank 上有梯度。Reducer 无法安全 all-reduce，必须报错。</span></div>
+          </div>
+
+          <div class="code-block">
+            <div class="code-title"><span>rank-divergent branch</span><button class="copy-btn">Copy</button></div>
+            <pre><code>losses = [
+    F.cross_entropy(ddp(0, xs[0], use_optional=True), ys[0]),
+    F.cross_entropy(ddp(1, xs[1], use_optional=False), ys[1]),
+]
+
+with pytest.raises(RuntimeError, match="used on ranks"):
+    ddp.backward(losses)</code></pre>
+          </div>
+
+          <p>
+            这个细节在真实训练里经常出现：随机分支、条件 dropout、classifier-free guidance、
+            某些 batch 才触发的 auxiliary head，都可能让不同 rank 走不同参数路径。
+            解决方式通常是同步随机决策，或确保所有 rank 的图结构一致。
+          </p>
+        </section>
+
+        <section id="verify" class="chapter">
+          <h2>10. 用测试证明每个前提都没有偷懒</h2>
+          <p class="lead">
+            教学实现不能只靠解释。`mini-ddp2` 的测试直接验证大 batch 等价性、broadcast、bucket、
+            hook、no_sync、unused parameter 和 MPS smoke path。
+          </p>
+
+          <figure class="figure">
+            <img src="assets/generated/10-cpu-mps-verification.png" alt="CPU 和 MPS 上验证 mini DDP 与单模型基线一致的图" />
+            <figcaption>同一个 batch 的两条训练路径最后比较参数差异，并检查 replica 同步。</figcaption>
+          </figure>
+
+          <div class="code-block">
+            <div class="code-title"><span>verification commands</span><button class="copy-btn">Copy</button></div>
+            <pre><code>uv run --extra dev pytest
+uv run mini-ddp2-demo --device cpu
+uv run mini-ddp2-demo --device auto</code></pre>
+          </div>
+
+          <div class="checklist">
+            <strong>测试覆盖的核心问题</strong>
+            <ul>
+              <li>DDP 一步更新是否等价于单模型完整 batch。</li>
+              <li>rank 0 broadcast 是否复制 parameter 和 buffer。</li>
+              <li>每个 trainable parameter 是否被分配到且只分配到一个 bucket。</li>
+              <li>autograd hook 是否标记每个 used parameter ready。</li>
+              <li>`no_sync()` 是否先积累本地梯度，再在下一次同步。</li>
+              <li>unused parameter 和 rank-divergent branch 是否给出可解释错误。</li>
+              <li>MPS 可用时，教学语义是否仍然能跑通。</li>
+            </ul>
+          </div>
+
+          <h3>最终心智模型</h3>
+          <p>
+            DDP 的核心不是“魔法地让多卡训练变快”，而是维护一组严格不变量：
+            初始参数相同；每个 rank 处理不同数据；autograd hook 告诉 Reducer 梯度 ready；
+            Reducer 用 bucket 对齐梯度结构；all-reduce mean 把本地梯度变成全局平均梯度；
+            optimizer 在每个 rank 本地执行，但因为输入状态相同，所以输出参数仍然相同。
+          </p>
+        </section>
+
+        <footer class="footer">
+          <p>
+            继续阅读代码：`src/mini_ddp2/core.py`。继续验证行为：`tests/test_mini_ddp2.py`。
+            继续对照 PyTorch：`docs/research.md`。
+          </p>
+        </footer>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

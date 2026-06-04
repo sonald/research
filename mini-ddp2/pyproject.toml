@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mini-ddp2"
+version = "0.1.0"
+description = "A detailed teaching implementation of PyTorch DistributedDataParallel semantics"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[project.scripts]
+mini-ddp2-demo = "mini_ddp2.demo:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
