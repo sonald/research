@@ -1,0 +1,5 @@
+.env
+.venv/
+results/
+data/qa/*.jsonl.gz
+__pycache__/

@@ -1,0 +1,1584 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HRM-Text: Efficient Pretraining Beyond Scaling | 图文讲解</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f7faf8;
+      --surface: #ffffff;
+      --surface-2: #eef6f4;
+      --ink: #17211f;
+      --muted: #5b6865;
+      --line: #d8e4df;
+      --teal: #0f9f98;
+      --teal-dark: #08726e;
+      --coral: #ee6f57;
+      --gold: #d39b2a;
+      --green: #5b8f62;
+      --blue: #4e86a6;
+      --rose: #b85f69;
+      --shadow: 0 16px 40px rgba(23, 33, 31, 0.08);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      line-height: 1.65;
+    }
+
+    a {
+      color: var(--teal-dark);
+      text-underline-offset: 3px;
+    }
+
+    .skip {
+      position: absolute;
+      left: 16px;
+      top: -64px;
+      z-index: 10;
+      padding: 10px 14px;
+      background: var(--ink);
+      color: white;
+      border-radius: 6px;
+      transition: top 0.2s ease;
+    }
+
+    .skip:focus {
+      top: 16px;
+    }
+
+    header.hero {
+      position: relative;
+      min-height: min(760px, 92vh);
+      display: grid;
+      align-items: end;
+      overflow: hidden;
+      isolation: isolate;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .hero img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      z-index: -2;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(90deg, rgba(247, 250, 248, 0.98) 0%, rgba(247, 250, 248, 0.86) 38%, rgba(247, 250, 248, 0.38) 72%, rgba(247, 250, 248, 0.14) 100%),
+        linear-gradient(0deg, rgba(247, 250, 248, 1) 0%, rgba(247, 250, 248, 0) 26%);
+    }
+
+    .hero-inner,
+    main > section > .wrap,
+    footer > .wrap {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .hero-inner {
+      padding: 112px 0 88px;
+    }
+
+    .eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid rgba(15, 159, 152, 0.26);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--teal-dark);
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      max-width: 830px;
+      font-size: clamp(2.6rem, 7vw, 6.4rem);
+      font-weight: 850;
+    }
+
+    .subtitle {
+      max-width: 760px;
+      margin: 24px 0 0;
+      color: #2e3d39;
+      font-size: clamp(1.05rem, 1.6vw, 1.32rem);
+      line-height: 1.7;
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 12px;
+      max-width: 920px;
+      margin-top: 32px;
+    }
+
+    .stat {
+      min-height: 94px;
+      padding: 16px;
+      border: 1px solid rgba(216, 228, 223, 0.9);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 12px 24px rgba(23, 33, 31, 0.06);
+    }
+
+    .stat strong {
+      display: block;
+      color: var(--ink);
+      font-size: clamp(1.35rem, 3vw, 2.2rem);
+      line-height: 1;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.35;
+    }
+
+    section {
+      padding: 76px 0;
+    }
+
+    section.alt {
+      background: var(--surface);
+      border-block: 1px solid var(--line);
+    }
+
+    section.tint {
+      background: #edf7f4;
+      border-block: 1px solid var(--line);
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(280px, 1.1fr);
+      gap: 44px;
+      align-items: start;
+      margin-bottom: 36px;
+    }
+
+    .section-kicker {
+      margin: 0 0 12px;
+      color: var(--coral);
+      font-weight: 800;
+      text-transform: uppercase;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+    }
+
+    h2 {
+      font-size: clamp(2rem, 4vw, 3.7rem);
+    }
+
+    h3 {
+      font-size: clamp(1.2rem, 2.2vw, 1.75rem);
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .lead {
+      color: #31413d;
+      font-size: 1.08rem;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card,
+    .note,
+    .chart-panel,
+    .code-note {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .card {
+      padding: 20px;
+      min-height: 100%;
+    }
+
+    .card h3 {
+      margin-bottom: 12px;
+    }
+
+    .card p,
+    .note p {
+      color: var(--muted);
+    }
+
+    .note {
+      padding: 18px 20px;
+      background: #fffaf0;
+      border-color: #ecd9a7;
+    }
+
+    .note strong {
+      color: #7a5310;
+    }
+
+    .thread {
+      display: grid;
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .thread-item {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .badge {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      color: var(--teal-dark);
+      font-weight: 850;
+    }
+
+    .thread-copy {
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .thread-copy strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .thread-copy span {
+      color: var(--muted);
+    }
+
+    .viz-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .chart-panel {
+      position: relative;
+      min-height: 440px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .chart-panel h3 {
+      margin-bottom: 6px;
+      padding-right: 120px;
+    }
+
+    .chart-panel .caption {
+      max-width: 680px;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .canvas-frame {
+      position: relative;
+      width: 100%;
+      height: clamp(320px, 34vw, 360px);
+      border-radius: 8px;
+      background: linear-gradient(180deg, #ffffff 0%, #f5fbf9 100%);
+      border: 1px solid #e1ebe7;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: manipulation;
+    }
+
+    .canvas-frame.tall {
+      height: clamp(410px, 44vw, 460px);
+    }
+
+    .canvas-tooltip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      max-width: min(260px, calc(100% - 24px));
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 10px 28px rgba(23, 33, 31, 0.13);
+      color: var(--ink);
+      font-size: 0.88rem;
+      line-height: 1.45;
+      pointer-events: none;
+      transform: translate(-999px, -999px);
+      z-index: 3;
+    }
+
+    .segmented {
+      position: absolute;
+      right: 18px;
+      top: 18px;
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #f7fbfa;
+    }
+
+    button {
+      min-height: 34px;
+      border: 0;
+      border-radius: 999px;
+      padding: 6px 12px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    button[aria-pressed="true"] {
+      background: var(--ink);
+      color: white;
+    }
+
+    button:focus-visible,
+    a:focus-visible {
+      outline: 3px solid rgba(238, 111, 87, 0.55);
+      outline-offset: 3px;
+    }
+
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+
+    .mini-table caption {
+      text-align: left;
+      margin-bottom: 8px;
+      color: var(--muted);
+    }
+
+    .mini-table th,
+    .mini-table td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .mini-table th {
+      color: #374541;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .mini-table td:last-child,
+    .mini-table th:last-child {
+      text-align: right;
+    }
+
+    .method-map {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(360px, 1.08fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .code-note {
+      padding: 18px;
+      overflow: auto;
+      background: #101916;
+      color: #eff7f2;
+    }
+
+    .code-note pre {
+      margin: 0;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 0.88rem;
+      line-height: 1.7;
+    }
+
+    .code-note .comment {
+      color: #9fc8bd;
+    }
+
+    .code-note .accent {
+      color: #ffd27a;
+    }
+
+    .code-note .coral {
+      color: #ff9b86;
+    }
+
+    .formula-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .formula {
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .formula code {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--teal-dark);
+      font-weight: 850;
+      white-space: nowrap;
+      overflow-wrap: normal;
+      overflow-x: auto;
+    }
+
+    .formula span {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .split-copy {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .callout-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .callout {
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .callout::before {
+      content: "";
+      width: 10px;
+      height: 100%;
+      min-height: 64px;
+      border-radius: 8px;
+      background: var(--teal);
+    }
+
+    .callout:nth-child(2)::before {
+      background: var(--coral);
+    }
+
+    .callout:nth-child(3)::before {
+      background: var(--gold);
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .callout span {
+      color: var(--muted);
+    }
+
+    .takeaways {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .takeaway {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .takeaway strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .takeaway span {
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .source-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--teal-dark);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    footer {
+      padding: 44px 0;
+      color: var(--muted);
+      background: #111a17;
+      border-top: 1px solid #0f1715;
+    }
+
+    footer a {
+      color: #a7e8de;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 860px) {
+      .hero-inner,
+      main > section > .wrap,
+      footer > .wrap {
+        width: min(100% - 28px, 1120px);
+      }
+
+      .hero-inner {
+        padding: 88px 0 64px;
+      }
+
+      .hero-stats,
+      .grid-2,
+      .grid-3,
+      .viz-grid,
+      .method-map,
+      .formula-row,
+      .split-copy,
+      .takeaways,
+      .section-head {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .chart-panel h3 {
+        padding-right: 0;
+      }
+
+      .segmented {
+        position: static;
+        margin-bottom: 12px;
+      }
+
+      section {
+        padding: 58px 0;
+      }
+
+      .canvas-frame {
+        height: 300px;
+      }
+
+      .canvas-frame.tall {
+        height: 360px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      header.hero {
+        min-height: 92vh;
+      }
+
+      .hero::after {
+        background:
+          linear-gradient(180deg, rgba(247, 250, 248, 0.9) 0%, rgba(247, 250, 248, 0.72) 40%, rgba(247, 250, 248, 1) 100%),
+          linear-gradient(90deg, rgba(247, 250, 248, 0.96), rgba(247, 250, 248, 0.2));
+      }
+
+      .hero img {
+        object-position: 58% center;
+      }
+
+      .hero-stats {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .stat {
+        min-height: 86px;
+        padding: 13px;
+      }
+
+      .pill {
+        font-size: 0.78rem;
+      }
+
+      .thread-item {
+        grid-template-columns: 36px minmax(0, 1fr);
+      }
+
+      .badge {
+        width: 36px;
+        height: 36px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#content">跳到正文</a>
+
+  <header class="hero">
+    <img src="assets/hrm-text-hero.png" alt="抽象科学插画：输入 token 经过双层循环结构后输出 response token" />
+    <div class="hero-inner">
+      <div class="eyebrow" aria-label="论文元信息">
+        <span class="pill">arXiv:2605.20613v1</span>
+        <span class="pill">cs.CL · 2026-05-20</span>
+        <span class="pill">Sapient Intelligence / MIT</span>
+      </div>
+      <h1>HRM-Text：不是把模型做大，而是让每个 token 更有用</h1>
+      <p class="subtitle">这篇论文的核心主张很锋利：如果架构、目标函数和数据形态一起设计，1B 参数模型也可以用很小的训练预算进入 2B-7B open model 的性能区间。</p>
+      <div class="hero-stats" aria-label="论文核心数字">
+        <div class="stat"><strong>1B</strong><span>HRM-Text 参数规模</span></div>
+        <div class="stat"><strong>40B</strong><span>unique tokens 训练数据</span></div>
+        <div class="stat"><strong>$1.5k</strong><span>约 46 小时，16 张 H100</span></div>
+        <div class="stat"><strong>84.5%</strong><span>GSM8K reported score</span></div>
+      </div>
+    </div>
+  </header>
+
+  <main id="content">
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">One Sentence</p>
+            <h2>一句话读懂</h2>
+          </div>
+          <p class="lead">HRM-Text 把语言模型看成一个“先理解任务、再反复执行”的系统：慢速的 <code>H</code> module 保持高层语义状态，快速的 <code>L</code> module 做局部迭代；训练时只对 response 计 loss，并用 <code>PrefixLM</code> 让 instruction 内部可以双向互看。</p>
+        </div>
+
+        <div class="grid-3">
+          <article class="card">
+            <h3>它反对什么？</h3>
+            <p>反对把“从头预训练”默认等同于 trillion tokens、大集群、raw-text next-token prediction。作者想证明：小预算也能做 architecture-level pretraining research。</p>
+          </article>
+          <article class="card">
+            <h3>它押注什么？</h3>
+            <p>押注结构先验：让模型有更多“内部计算步”，但不等价增加参数；同时把训练目标贴近真实使用场景，即给定 instruction 生成 answer。</p>
+          </article>
+          <article class="card">
+            <h3>它不能证明什么？</h3>
+            <p>它不是“1B 全面打败 7B”的证明。它更像 existence proof：在 instruction-heavy 数据和小预算下，co-design 能显著改变 compute-to-performance ratio。</p>
+          </article>
+        </div>
+
+        <div class="note" style="margin-top: 18px;">
+          <p><strong>读法提醒：</strong>论文中同时出现 40B unique tokens 和 60B training duration tokens。前者是去重数据规模，后者是带重复采样的训练 token 数；效率图强调 40B unique tokens。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Glossary First</p>
+            <h2>先把术语放稳</h2>
+          </div>
+          <p class="lead">这篇论文的术语很多，但主线其实不复杂：它在 Transformer block 外面加了“循环计算”，再用训练技巧避免循环带来的梯度问题。</p>
+        </div>
+
+        <div class="grid-3">
+          <article class="card">
+            <h3><code>H</code> module</h3>
+            <p>High-level / slow state。它每个大周期更新一次，更像“当前任务语义、计划、全局上下文”的状态容器。</p>
+          </article>
+          <article class="card">
+            <h3><code>L</code> module</h3>
+            <p>Low-level / fast state。它在一次 <code>H</code> 更新前连续执行 3 次，用来做局部 refinement。</p>
+          </article>
+          <article class="card">
+            <h3><code>MagicNorm</code></h3>
+            <p>内部用 <code>PreNorm</code> 保留梯度通路，模块出口再加一个 norm 控制 forward variance。关键在 <code>N</code> 个 forward steps 与 <code>K</code> 个 backward steps 的不对称。</p>
+          </article>
+          <article class="card">
+            <h3><code>Warmup deep credit</code></h3>
+            <p>不是一开始就让梯度穿过很长循环链。训练初期 <code>K=2</code>，之后线性 warm up 到 <code>K=5</code>。</p>
+          </article>
+          <article class="card">
+            <h3><code>Task-completion objective</code></h3>
+            <p>不对 instruction token 计 loss，只优化 <code>-log P(xa | xq)</code>。也就是把学习压力集中在“回答得对”。</p>
+          </article>
+          <article class="card">
+            <h3><code>PrefixLM mask</code></h3>
+            <p>Instruction segment 内部双向 attention；response segment 仍然 causal。这样 decoder-only 实现里有一点 encoder-decoder 的味道。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Architecture</p>
+            <h2>HRM-Text 的计算流</h2>
+          </div>
+          <p class="lead">论文里的 forward pass 是两个高层周期；每个周期先做三次快速 <code>L</code> 更新，再做一次慢速 <code>H</code> 更新。你可以把它看成：同一组参数被重复调用，让模型获得更深的 serial computation。</p>
+        </div>
+
+        <div class="method-map">
+          <div class="chart-panel">
+            <h3>双时间尺度 recurrence</h3>
+            <p class="caption">Canvas 图按论文设定画出 <code>H2L3</code>：2 个 <code>H</code> cycles，每个 cycle 包含 3 个 <code>L</code> updates 和 1 个 <code>H</code> update。</p>
+            <div class="canvas-frame" id="architectureFrame">
+              <canvas id="architectureCanvas" aria-label="HRM-Text H2L3 计算流示意图"></canvas>
+            </div>
+            <p class="sr-only">输入 embedding 初始化 H state 和 L state。每个 H cycle 中 L module 连续更新三次，然后 H module 更新一次，最终 H state 进入 LM head 产生 logits。</p>
+          </div>
+
+          <div class="code-note" aria-label="HRM-Text forward pass 伪代码">
+<pre><span class="comment"># H2L3: two high-level cycles, three low-level steps per cycle</span>
+z_H = init_from_input_embeddings(tokens)
+z_L = fixed_low_level_state()
+
+<span class="coral">for</span> h_cycle <span class="coral">in</span> range(2):
+    <span class="coral">for</span> l_step <span class="coral">in</span> range(3):
+        z_L = L_module(z_L, z_H, mask)
+
+    z_H = H_module(z_H, z_L, mask)
+
+logits = lm_head(z_H)
+
+<span class="comment"># Backward horizon warms up:
+# K = 2 early, then linearly grows to K = 5</span></pre>
+          </div>
+        </div>
+
+        <div class="formula-row" aria-label="三个关键公式">
+          <div class="formula">
+            <code>PreNorm</code>
+            <span>梯度路径干净，但 residual 累加可能让 hidden-state variance 长大。</span>
+          </div>
+          <div class="formula">
+            <code>PostNorm</code>
+            <span>forward activation 更稳，但 normalization 可能切断干净的 identity gradient path。</span>
+          </div>
+          <div class="formula">
+            <code>MagicNorm</code>
+            <span>内部 <code>PreNorm</code>，出口 <code>Norm</code>；用 TBPTT 的短 backward horizon 避开纯 PostNorm 的训练痛点。</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tint">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Objective</p>
+            <h2>训练目标为什么重要</h2>
+          </div>
+          <p class="lead">作者认为 raw-text next-token prediction 在小预算下浪费了很多学习信号：真实推理时，prompt 已经给定；模型真正需要学的是如何根据 prompt 产出 response。</p>
+        </div>
+
+        <div class="viz-grid">
+          <div class="chart-panel">
+            <h3><code>PrefixLM</code> attention mask</h3>
+            <p class="caption">绿色区域是 instruction token 之间的双向 attention；珊瑚色区域是 response token 的 causal generation。</p>
+            <div class="canvas-frame tall" id="maskFrame">
+              <canvas id="maskCanvas" aria-label="PrefixLM mask 矩阵，instruction 双向可见，response 因果可见"></canvas>
+            </div>
+          </div>
+
+          <div class="callout-list">
+            <div class="callout">
+              <div>
+                <strong>普通 causal LM：<code>-log P(x)</code></strong>
+                <span>把 instruction 和 response 都当作要预测的 token。对已知 prompt 也交 loss。</span>
+              </div>
+            </div>
+            <div class="callout">
+              <div>
+                <strong>Task-completion：<code>-log P(xa | xq)</code></strong>
+                <span>只在 answer 上计 loss，让小预算训练更专注于完成任务。</span>
+              </div>
+            </div>
+            <div class="callout">
+              <div>
+                <strong><code>PrefixLM</code>：prompt 先被充分整合</strong>
+                <span>Instruction 内 token 可以互相看，response 仍按自回归方式生成。</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="code-note" style="margin-top: 22px;" aria-label="PrefixLM mask 伪代码">
+<pre><span class="comment"># tokens = [instruction prefix | response suffix]</span>
+loss_mask = response_positions_only
+
+attention(i, j) =
+    <span class="accent">allow</span> if i and j are both in instruction
+    <span class="accent">allow</span> if i is response and j <= i
+    <span class="coral">block</span> otherwise</pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Evidence</p>
+            <h2>实验数字怎么支持它</h2>
+          </div>
+          <p class="lead">最有解释力的不是单个 benchmark，而是两个层次的证据：同预算对比里 HRM 更能吃掉训练 FLOPs；消融里 objective、PrefixLM、HRM architecture 都逐步抬高平均分。</p>
+        </div>
+
+        <div class="viz-grid">
+          <div class="chart-panel">
+            <div class="segmented" aria-label="效率图横轴选择">
+              <button type="button" id="axisFlops" aria-pressed="true">FLOPs</button>
+              <button type="button" id="axisTokens" aria-pressed="false">Tokens</button>
+            </div>
+            <h3>效率前沿：平均分 vs 训练预算</h3>
+            <p class="caption">平均分取论文 Table 4 的八个 benchmark。横轴为 log scale，HRM-Text 的 token 口径使用论文强调的 40B unique tokens。</p>
+            <div class="canvas-frame tall" id="frontierFrame">
+              <canvas id="frontierCanvas" aria-label="HRM-Text 与 open model 的训练预算效率散点图"></canvas>
+              <div class="canvas-tooltip" id="frontierTip" role="status" aria-live="polite"></div>
+            </div>
+          </div>
+
+          <div>
+            <table class="mini-table">
+              <caption>Table 4 摘要：八项 benchmark 平均分</caption>
+              <thead>
+                <tr><th>Model</th><th>Budget</th><th>Avg</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>HRM-Text 1B</td><td>1e21 FLOPs / 40B unique</td><td>73.4</td></tr>
+                <tr><td>OLMo3 7B</td><td>252e21 FLOPs / 6T</td><td>69.6</td></tr>
+                <tr><td>Ouro 1.4B</td><td>259e21 FLOPs / 7T</td><td>63.7</td></tr>
+                <tr><td>Llama3.2 3B</td><td>162e21 FLOPs / 9T</td><td>59.8</td></tr>
+                <tr><td>Qwen3.5 2B</td><td>432e21 FLOPs / 36T</td><td>58.2</td></tr>
+                <tr><td>Gemma3 4B</td><td>96e21 FLOPs / 4T</td><td>56.6</td></tr>
+              </tbody>
+            </table>
+            <div class="note" style="margin-top: 16px;">
+              <p><strong>关键读法：</strong>HRM-Text 在 MMLU 上不是最高，但在 GSM8K、DROP、MATH 这些更偏 task execution / reasoning 的指标上很强，这正符合作者关于“reasoning core vs factual breadth”的讨论。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-panel" style="margin-top: 22px;">
+          <h3>消融：每一步都在加分</h3>
+          <p class="caption">基于论文 Table 3。Canvas 条形图显示从 full causal LM 到 response-only、PrefixLM，再到 HRM architecture 的平均分变化。</p>
+          <div class="canvas-frame" id="ablationFrame">
+            <canvas id="ablationCanvas" aria-label="Table 3 消融实验平均分条形图"></canvas>
+            <div class="canvas-tooltip" id="ablationTip" role="status" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">What To Believe</p>
+            <h2>结论应该怎么拿捏</h2>
+          </div>
+          <p class="lead">这篇论文最值得记住的不是“一个新模型名”，而是一个设计原则：当模型预算很小，架构、目标函数、数据格式之间的错配会被放大；反过来，co-design 的收益也会变大。</p>
+        </div>
+
+        <div class="split-copy">
+          <div class="thread">
+            <div class="thread-item">
+              <div class="badge">1</div>
+              <div class="thread-copy">
+                <strong>HRM 的价值：把深度变成时间</strong>
+                <span>重复调用 <code>H/L</code> modules 相当于给模型更多内部计算步，而不是简单堆更多独立参数。</span>
+              </div>
+            </div>
+            <div class="thread-item">
+              <div class="badge">2</div>
+              <div class="thread-copy">
+                <strong>MagicNorm 的价值：让循环不要炸</strong>
+                <span>递归模型的难点是长链反传。MagicNorm 和 warmup horizon 都是在控制这个优化风险。</span>
+              </div>
+            </div>
+            <div class="thread-item">
+              <div class="badge">3</div>
+              <div class="thread-copy">
+                <strong>PrefixLM 的价值：别让 prompt 浪费 loss</strong>
+                <span>Instruction 已知，response 才是要完成的任务；这让训练目标更贴近 inference。</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="callout-list">
+            <div class="callout">
+              <div>
+                <strong>可信之处</strong>
+                <span>作者给了 FLOPs-matched comparison、objective ablation、dataset contamination test 和 effective depth analysis，证据链不只靠最终榜单。</span>
+              </div>
+            </div>
+            <div class="callout">
+              <div>
+                <strong>谨慎之处</strong>
+                <span>这是 arXiv v1 preprint；baseline 数字混合了原论文报告和重新评测，且只展示到 HRM-Text 1B 规模。</span>
+              </div>
+            </div>
+            <div class="callout">
+              <div>
+                <strong>工程代价</strong>
+                <span>固定 recurrence 会增加 inference 计算；PrefixLM 的 multi-turn KV cache 逻辑也需要 serving 框架显式处理。</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Implementation Notes</p>
+            <h2>Canvas2D 实现注记</h2>
+          </div>
+          <p class="lead">这些图的标记量不大，SVG 也能做；这里使用 Canvas2D 是为了统一绘制矩阵、路径、散点和条形，并保留后续扩展到更高密度实验图的路径。文本、链接、按钮、表格和语义信息仍由 HTML 承担。</p>
+        </div>
+
+        <div class="takeaways">
+          <div class="takeaway">
+            <strong>渲染结构</strong>
+            <span>每张图保留 scene state，Canvas 只负责 immediate-mode draw；resize 后从 state 重画。</span>
+          </div>
+          <div class="takeaway">
+            <strong>DPR 与移动端</strong>
+            <span>Canvas CSS size 与 backing store 分离，<code>devicePixelRatio</code> capped at 2，移动端优先保证文字和触点。</span>
+          </div>
+          <div class="takeaway">
+            <strong>Hit testing</strong>
+            <span>散点和条形图使用 retained geometry 的 nearest / rectangle analytic hit test，坐标由 <code>getBoundingClientRect()</code> 映射。</span>
+          </div>
+          <div class="takeaway">
+            <strong>可访问性</strong>
+            <span>Canvas 图旁边保留表格、caption 和 screen-reader 描述；tooltip 是 HTML overlay，不把语义塞进像素。</span>
+          </div>
+        </div>
+
+        <div class="sources" aria-label="资料来源">
+          <a class="source-link" href="https://arxiv.org/html/2605.20613v1">arXiv HTML</a>
+          <a class="source-link" href="https://arxiv.org/pdf/2605.20613v1">arXiv PDF</a>
+          <a class="source-link" href="https://github.com/sapientinc/HRM-Text">GitHub: HRM-Text</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>Built as a local Chinese explainer for <a href="https://arxiv.org/abs/2605.20613">HRM-Text: Efficient Pretraining Beyond Scaling</a>. Generated header image saved in <code>assets/hrm-text-hero.png</code>.</p>
+    </div>
+  </footer>
+
+  <script>
+    const colors = {
+      ink: "#17211f",
+      muted: "#5b6865",
+      line: "#d8e4df",
+      teal: "#0f9f98",
+      tealDark: "#08726e",
+      coral: "#ee6f57",
+      gold: "#d39b2a",
+      green: "#5b8f62",
+      blue: "#4e86a6",
+      rose: "#b85f69",
+      surface: "#ffffff"
+    };
+
+    function setupCanvas(canvas, maxPixelRatio = 2) {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const cssWidth = Math.max(1, Math.round(rect.width));
+      const cssHeight = Math.max(1, Math.round(rect.height));
+      const ratio = Math.max(1, Math.min(maxPixelRatio, window.devicePixelRatio || 1));
+      const bitmapWidth = Math.round(cssWidth * ratio);
+      const bitmapHeight = Math.round(cssHeight * ratio);
+      if (canvas.width !== bitmapWidth || canvas.height !== bitmapHeight) {
+        canvas.width = bitmapWidth;
+        canvas.height = bitmapHeight;
+      }
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      return { ctx, width: cssWidth, height: cssHeight, ratio };
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      const rr = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + rr, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rr);
+      ctx.arcTo(x + w, y + h, x, y + h, rr);
+      ctx.arcTo(x, y + h, x, y, rr);
+      ctx.arcTo(x, y, x + w, y, rr);
+      ctx.closePath();
+    }
+
+    function arrow(ctx, x1, y1, x2, y2, color, width = 2) {
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - 10 * Math.cos(angle - Math.PI / 6), y2 - 10 * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(x2 - 10 * Math.cos(angle + Math.PI / 6), y2 - 10 * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function label(ctx, text, x, y, options = {}) {
+      ctx.save();
+      ctx.fillStyle = options.color || colors.ink;
+      ctx.font = options.font || "700 13px system-ui, sans-serif";
+      ctx.textAlign = options.align || "center";
+      ctx.textBaseline = options.baseline || "middle";
+      ctx.fillText(text, x, y);
+      ctx.restore();
+    }
+
+    function drawArchitecture() {
+      const canvas = document.getElementById("architectureCanvas");
+      const { ctx, width, height } = setupCanvas(canvas);
+      ctx.clearRect(0, 0, width, height);
+
+      const margin = Math.max(18, width * 0.05);
+      const top = Math.max(36, height * 0.15);
+      const midY = height * 0.52;
+      const bottomY = height * 0.78;
+      const left = margin;
+      const right = width - margin;
+      const step = (right - left) / 8;
+
+      ctx.strokeStyle = colors.line;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      ctx.beginPath();
+      ctx.moveTo(left, midY);
+      ctx.lineTo(right, midY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      roundRect(ctx, left, midY - 28, 92, 56, 8);
+      ctx.fillStyle = "#edf7f4";
+      ctx.fill();
+      ctx.strokeStyle = colors.line;
+      ctx.stroke();
+      label(ctx, "input", left + 46, midY - 8, { color: colors.tealDark });
+      label(ctx, "embed", left + 46, midY + 12, { color: colors.muted, font: "600 12px system-ui, sans-serif" });
+
+      const nodes = [];
+      let x = left + step * 1.35;
+      for (let cycle = 0; cycle < 2; cycle += 1) {
+        for (let l = 0; l < 3; l += 1) {
+          nodes.push({ type: "L", cycle, x, y: bottomY, color: colors.teal });
+          x += step * 0.8;
+        }
+        nodes.push({ type: "H", cycle, x, y: top, color: colors.coral });
+        x += step * 1.05;
+      }
+
+      const all = [{ x: left + 92, y: midY, type: "start" }, ...nodes, { x: right - 58, y: midY, type: "head" }];
+      for (let i = 0; i < all.length - 1; i += 1) {
+        arrow(ctx, all[i].x + (all[i].type === "start" ? 0 : 20), all[i].y, all[i + 1].x - 24, all[i + 1].y, "#9bb7b0", 1.7);
+      }
+
+      nodes.forEach((node, index) => {
+        ctx.save();
+        ctx.fillStyle = node.type === "L" ? "#e5f5f2" : "#fff1ed";
+        ctx.strokeStyle = node.type === "L" ? colors.teal : colors.coral;
+        ctx.lineWidth = 2;
+        roundRect(ctx, node.x - 28, node.y - 24, 56, 48, 8);
+        ctx.fill();
+        ctx.stroke();
+        label(ctx, node.type, node.x, node.y - 4, { color: node.type === "L" ? colors.tealDark : colors.coral, font: "850 18px system-ui, sans-serif" });
+        label(ctx, `t${index + 1}`, node.x, node.y + 15, { color: colors.muted, font: "650 11px system-ui, sans-serif" });
+        ctx.restore();
+      });
+
+      roundRect(ctx, right - 104, midY - 30, 104, 60, 8);
+      ctx.fillStyle = "#fff8e8";
+      ctx.strokeStyle = colors.gold;
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+      label(ctx, "LM head", right - 52, midY - 7, { color: "#8a6418" });
+      label(ctx, "logits", right - 52, midY + 14, { color: colors.muted, font: "650 12px system-ui, sans-serif" });
+
+      label(ctx, "Cycle 1", left + step * 2.6, height - 22, { color: colors.muted });
+      label(ctx, "Cycle 2", left + step * 5.7, height - 22, { color: colors.muted });
+
+      ctx.strokeStyle = "rgba(15,159,152,0.25)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(left + step * 2.3, (top + bottomY) / 2, step * 1.25, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(left + step * 5.55, (top + bottomY) / 2, step * 1.25, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawMask() {
+      const canvas = document.getElementById("maskCanvas");
+      const { ctx, width, height } = setupCanvas(canvas);
+      ctx.clearRect(0, 0, width, height);
+
+      const nQ = 8;
+      const nA = 7;
+      const n = nQ + nA;
+      const pad = Math.max(40, Math.min(width, height) * 0.12);
+      const size = Math.min(width - pad * 1.45, height - pad * 1.35);
+      const cell = Math.floor(size / n);
+      const grid = cell * n;
+      const x0 = (width - grid) / 2;
+      const y0 = (height - grid) / 2 + 10;
+
+      ctx.fillStyle = "#ffffff";
+      roundRect(ctx, x0 - 16, y0 - 42, grid + 32, grid + 70, 8);
+      ctx.fill();
+      ctx.strokeStyle = colors.line;
+      ctx.stroke();
+
+      for (let i = 0; i < n; i += 1) {
+        for (let j = 0; j < n; j += 1) {
+          let allowed = false;
+          let fill = "#f0f4f2";
+          if (i < nQ && j < nQ) {
+            allowed = true;
+            fill = "rgba(15,159,152,0.78)";
+          } else if (i >= nQ && j <= i) {
+            allowed = true;
+            fill = j < nQ ? "rgba(211,155,42,0.78)" : "rgba(238,111,87,0.82)";
+          }
+          ctx.fillStyle = allowed ? fill : "#edf1ef";
+          ctx.fillRect(x0 + j * cell + 1, y0 + i * cell + 1, cell - 2, cell - 2);
+        }
+      }
+
+      ctx.strokeStyle = colors.ink;
+      ctx.lineWidth = 1.8;
+      ctx.strokeRect(x0, y0, grid, grid);
+      ctx.strokeStyle = "rgba(23,33,31,0.45)";
+      ctx.beginPath();
+      ctx.moveTo(x0 + nQ * cell, y0);
+      ctx.lineTo(x0 + nQ * cell, y0 + grid);
+      ctx.moveTo(x0, y0 + nQ * cell);
+      ctx.lineTo(x0 + grid, y0 + nQ * cell);
+      ctx.stroke();
+
+      label(ctx, "Key tokens", x0 + grid / 2, y0 - 24, { color: colors.muted });
+      ctx.save();
+      ctx.translate(x0 - 24, y0 + grid / 2);
+      ctx.rotate(-Math.PI / 2);
+      label(ctx, "Query tokens", 0, 0, { color: colors.muted });
+      ctx.restore();
+
+      label(ctx, "instruction", x0 + (nQ * cell) / 2, y0 + grid + 20, { color: colors.tealDark, font: "800 12px system-ui, sans-serif" });
+      label(ctx, "response", x0 + nQ * cell + ((n - nQ) * cell) / 2, y0 + grid + 20, { color: colors.coral, font: "800 12px system-ui, sans-serif" });
+
+      const legendY = y0 + grid + 46;
+      const legend = [
+        ["prompt 双向", colors.teal],
+        ["answer 因果", colors.coral],
+        ["prompt 可见", colors.gold]
+      ];
+      let lx = x0;
+      legend.forEach(([text, color]) => {
+        ctx.fillStyle = color;
+        roundRect(ctx, lx, legendY - 7, 12, 12, 3);
+        ctx.fill();
+        label(ctx, text, lx + 64, legendY, { align: "center", color: colors.muted, font: "650 11px system-ui, sans-serif" });
+        lx += 108;
+      });
+    }
+
+    const frontierData = [
+      { model: "HRM-Text 1B", architecture: "Recurrent", flops: 1, tokensUnique: 0.04, tokensTable: 0.06, avg: 73.4, color: colors.teal, highlight: true },
+      { model: "Huginn 3.5B", architecture: "Recurrent", flops: 127, tokensUnique: 0.8, tokensTable: 0.8, avg: 41.1, color: colors.rose },
+      { model: "OLMo3 7B", architecture: "Dense", flops: 252, tokensUnique: 6, tokensTable: 6, avg: 69.6, color: colors.green },
+      { model: "Llama3.2 3B", architecture: "Dense", flops: 162, tokensUnique: 9, tokensTable: 9, avg: 59.8, color: colors.blue },
+      { model: "Gemma3 4B", architecture: "Dense", flops: 96, tokensUnique: 4, tokensTable: 4, avg: 56.6, color: colors.gold },
+      { model: "Qwen3.5 2B", architecture: "Dense", flops: 432, tokensUnique: 36, tokensTable: 36, avg: 58.2, color: colors.coral },
+      { model: "Ouro 1.4B", architecture: "Recurrent", flops: 259, tokensUnique: 7, tokensTable: 7, avg: 63.7, color: "#6f8c6d" }
+    ];
+
+    const ablationData = [
+      { label: "Transformer · P(x)", group: "causal all tokens", avg: 41.9, color: "#b6c7c1" },
+      { label: "Transformer · P(xa|xq)", group: "response loss", avg: 57.6, color: colors.gold },
+      { label: "Transformer · PrefixLM", group: "response + PrefixLM", avg: 65.3, color: colors.coral },
+      { label: "HRM · P(x)", group: "architecture only", avg: 51.5, color: "#8fb8b1" },
+      { label: "HRM · P(xa|xq)", group: "HRM + response", avg: 62.3, color: colors.green },
+      { label: "HRM · PrefixLM", group: "full HRM-Text", avg: 73.4, color: colors.teal }
+    ];
+
+    let frontierAxis = "flops";
+    let frontierGeometry = [];
+    let ablationGeometry = [];
+
+    function log10(x) {
+      return Math.log(x) / Math.LN10;
+    }
+
+    function drawAxes(ctx, plot, xTicks, yTicks, xScale, yScale, xLabel, yLabel) {
+      ctx.save();
+      ctx.strokeStyle = colors.line;
+      ctx.fillStyle = colors.muted;
+      ctx.font = "650 11px system-ui, sans-serif";
+      ctx.lineWidth = 1;
+
+      yTicks.forEach((tick) => {
+        const y = yScale(tick);
+        ctx.beginPath();
+        ctx.moveTo(plot.x, y);
+        ctx.lineTo(plot.x + plot.w, y);
+        ctx.stroke();
+        ctx.textAlign = "right";
+        ctx.fillText(String(tick), plot.x - 8, y + 4);
+      });
+
+      xTicks.forEach((tick) => {
+        const x = xScale(tick);
+        ctx.beginPath();
+        ctx.moveTo(x, plot.y);
+        ctx.lineTo(x, plot.y + plot.h);
+        ctx.stroke();
+        ctx.textAlign = "center";
+        const labelText = tick >= 1 ? `${tick}x` : `${Math.round(tick * 1000)}B`;
+        ctx.fillText(labelText, x, plot.y + plot.h + 18);
+      });
+
+      ctx.strokeStyle = colors.ink;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(plot.x, plot.y);
+      ctx.lineTo(plot.x, plot.y + plot.h);
+      ctx.lineTo(plot.x + plot.w, plot.y + plot.h);
+      ctx.stroke();
+
+      label(ctx, xLabel, plot.x + plot.w / 2, plot.y + plot.h + 42, { color: colors.muted, font: "700 12px system-ui, sans-serif" });
+      ctx.save();
+      ctx.translate(plot.x - 44, plot.y + plot.h / 2);
+      ctx.rotate(-Math.PI / 2);
+      label(ctx, yLabel, 0, 0, { color: colors.muted, font: "700 12px system-ui, sans-serif" });
+      ctx.restore();
+      ctx.restore();
+    }
+
+    function drawFrontier() {
+      const canvas = document.getElementById("frontierCanvas");
+      const { ctx, width, height } = setupCanvas(canvas);
+      ctx.clearRect(0, 0, width, height);
+
+      const compact = width < 520;
+      const plot = {
+        x: compact ? 48 : 72,
+        y: 28,
+        w: width - (compact ? 78 : 116),
+        h: height - 88
+      };
+      const field = frontierAxis === "flops" ? "flops" : "tokensUnique";
+      const values = frontierData.map((d) => d[field]);
+      const minLog = Math.floor(Math.min(...values.map(log10)) * 10) / 10;
+      const maxLog = Math.ceil(Math.max(...values.map(log10)) * 10) / 10;
+      const yMin = 35;
+      const yMax = 78;
+      const xScale = (v) => plot.x + ((log10(v) - minLog) / (maxLog - minLog)) * plot.w;
+      const yScale = (v) => plot.y + (1 - (v - yMin) / (yMax - yMin)) * plot.h;
+      const xTicks = frontierAxis === "flops" ? [1, 10, 100, 400] : [0.04, 0.1, 1, 10, 36];
+
+      drawAxes(ctx, plot, xTicks, [40, 50, 60, 70], xScale, yScale, frontierAxis === "flops" ? "Training FLOPs ratio vs HRM" : "Training tokens (T, log)", "Avg benchmark score");
+
+      frontierGeometry = [];
+      frontierData.forEach((d) => {
+        const x = xScale(d[field]);
+        const y = yScale(d.avg);
+        const radius = d.highlight ? 9 : 7;
+        ctx.save();
+        ctx.fillStyle = d.color;
+        ctx.strokeStyle = d.highlight ? colors.ink : "#ffffff";
+        ctx.lineWidth = d.highlight ? 2.5 : 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        const dx = d.highlight ? 12 : 9;
+        const dy = d.highlight ? -10 : -8;
+        ctx.fillStyle = d.highlight ? colors.ink : colors.muted;
+        ctx.font = d.highlight ? "850 12px system-ui, sans-serif" : "650 11px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(compact ? d.model.replace(" 1B", "") : d.model, x + dx, y + dy);
+        frontierGeometry.push({ ...d, x, y, r: Math.max(18, radius + 8) });
+      });
+
+      const hrm = frontierData[0];
+      const hrmX = xScale(hrm[field]);
+      const hrmY = yScale(hrm.avg);
+      ctx.strokeStyle = "rgba(15,159,152,0.38)";
+      ctx.setLineDash([5, 6]);
+      ctx.beginPath();
+      ctx.moveTo(hrmX, hrmY);
+      ctx.lineTo(plot.x + plot.w, hrmY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function drawAblation() {
+      const canvas = document.getElementById("ablationCanvas");
+      const { ctx, width, height } = setupCanvas(canvas);
+      ctx.clearRect(0, 0, width, height);
+
+      const compact = width < 620;
+      const plot = {
+        x: compact ? 44 : 68,
+        y: 28,
+        w: width - (compact ? 68 : 96),
+        h: height - 86
+      };
+      const max = 80;
+      const barGap = compact ? 8 : 12;
+      const barW = (plot.w - barGap * (ablationData.length - 1)) / ablationData.length;
+      const yScale = (v) => plot.y + (1 - v / max) * plot.h;
+      ablationGeometry = [];
+
+      ctx.strokeStyle = colors.line;
+      ctx.fillStyle = colors.muted;
+      ctx.font = "650 11px system-ui, sans-serif";
+      [20, 40, 60, 80].forEach((tick) => {
+        const y = yScale(tick);
+        ctx.beginPath();
+        ctx.moveTo(plot.x, y);
+        ctx.lineTo(plot.x + plot.w, y);
+        ctx.stroke();
+        ctx.textAlign = "right";
+        ctx.fillText(tick, plot.x - 8, y + 4);
+      });
+
+      ablationData.forEach((d, i) => {
+        const x = plot.x + i * (barW + barGap);
+        const y = yScale(d.avg);
+        const h = plot.y + plot.h - y;
+        ctx.fillStyle = d.color;
+        roundRect(ctx, x, y, barW, h, 6);
+        ctx.fill();
+        ctx.fillStyle = colors.ink;
+        ctx.font = "850 12px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(d.avg.toFixed(1), x + barW / 2, y - 8);
+
+        ctx.save();
+        ctx.translate(x + barW / 2, plot.y + plot.h + 14);
+        ctx.rotate(compact ? -Math.PI / 5 : 0);
+        ctx.fillStyle = colors.muted;
+        ctx.font = compact ? "650 10px system-ui, sans-serif" : "650 11px system-ui, sans-serif";
+        ctx.textAlign = compact ? "right" : "center";
+        ctx.fillText(compact ? d.label.split(" · ")[0] : d.label, 0, 0);
+        ctx.restore();
+
+        ablationGeometry.push({ ...d, x, y, w: barW, h });
+      });
+    }
+
+    function showTooltip(tip, frame, x, y, html) {
+      tip.innerHTML = html;
+      const frameRect = frame.getBoundingClientRect();
+      const tipRect = tip.getBoundingClientRect();
+      const left = Math.min(Math.max(12, x + 12), frameRect.width - tipRect.width - 12);
+      const top = Math.min(Math.max(12, y + 12), frameRect.height - tipRect.height - 12);
+      tip.style.transform = `translate(${left}px, ${top}px)`;
+    }
+
+    function hideTooltip(tip) {
+      tip.style.transform = "translate(-999px, -999px)";
+    }
+
+    function canvasPoint(event, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+    }
+
+    function bindFrontierPointer() {
+      const canvas = document.getElementById("frontierCanvas");
+      const frame = document.getElementById("frontierFrame");
+      const tip = document.getElementById("frontierTip");
+      canvas.addEventListener("pointermove", (event) => {
+        const p = canvasPoint(event, canvas);
+        let hit = null;
+        let best = Infinity;
+        frontierGeometry.forEach((d) => {
+          const dist = Math.hypot(p.x - d.x, p.y - d.y);
+          if (dist < d.r && dist < best) {
+            hit = d;
+            best = dist;
+          }
+        });
+        if (!hit) {
+          hideTooltip(tip);
+          return;
+        }
+        const budget = frontierAxis === "flops"
+          ? `${hit.flops}e21 FLOPs`
+          : `${hit.tokensUnique}T tokens`;
+        showTooltip(tip, frame, p.x, p.y, `<strong>${hit.model}</strong><br>${hit.architecture}; avg ${hit.avg.toFixed(1)}<br>${budget}`);
+      });
+      canvas.addEventListener("pointerleave", () => hideTooltip(tip));
+    }
+
+    function bindAblationPointer() {
+      const canvas = document.getElementById("ablationCanvas");
+      const frame = document.getElementById("ablationFrame");
+      const tip = document.getElementById("ablationTip");
+      canvas.addEventListener("pointermove", (event) => {
+        const p = canvasPoint(event, canvas);
+        const hit = ablationGeometry.find((d) => p.x >= d.x && p.x <= d.x + d.w && p.y >= d.y && p.y <= d.y + d.h);
+        if (!hit) {
+          hideTooltip(tip);
+          return;
+        }
+        showTooltip(tip, frame, p.x, p.y, `<strong>${hit.label}</strong><br>${hit.group}<br>average score ${hit.avg.toFixed(1)}`);
+      });
+      canvas.addEventListener("pointerleave", () => hideTooltip(tip));
+    }
+
+    function redrawAll() {
+      drawArchitecture();
+      drawMask();
+      drawFrontier();
+      drawAblation();
+    }
+
+    function attachResize() {
+      const targets = ["architectureFrame", "maskFrame", "frontierFrame", "ablationFrame"].map((id) => document.getElementById(id));
+      const observer = new ResizeObserver(() => requestAnimationFrame(redrawAll));
+      targets.forEach((target) => observer.observe(target));
+      window.addEventListener("resize", () => requestAnimationFrame(redrawAll));
+    }
+
+    document.getElementById("axisFlops").addEventListener("click", () => {
+      frontierAxis = "flops";
+      document.getElementById("axisFlops").setAttribute("aria-pressed", "true");
+      document.getElementById("axisTokens").setAttribute("aria-pressed", "false");
+      drawFrontier();
+    });
+
+    document.getElementById("axisTokens").addEventListener("click", () => {
+      frontierAxis = "tokens";
+      document.getElementById("axisFlops").setAttribute("aria-pressed", "false");
+      document.getElementById("axisTokens").setAttribute("aria-pressed", "true");
+      drawFrontier();
+    });
+
+    attachResize();
+    bindFrontierPointer();
+    bindAblationPointer();
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(redrawAll);
+    } else {
+      redrawAll();
+    }
+  </script>
+</body>
+</html>
