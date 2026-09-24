@@ -1,0 +1,1668 @@
+{
+  "at": "2026-09-24T09:28:07.025Z",
+  "engineGroundTruth": {
+    "hardDropLines": 0,
+    "leftThenHardDropLines": 2
+  },
+  "records": [
+    {
+      "id": "initial-default",
+      "request": {
+        "state": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  ....t.....\n01  ...ttt....\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..........\n19  ..........\nActive: {\"type\":\"T\",\"x\":3,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":4,\"y\":0,\"type\":\"T\"},{\"x\":3,\"y\":1,\"type\":\"T\"},{\"x\":4,\"y\":1,\"type\":\"T\"},{\"x\":5,\"y\":1,\"type\":\"T\"}]; landing_cells=[{\"x\":4,\"y\":18,\"type\":\"T\"},{\"x\":3,\"y\":19,\"type\":\"T\"},{\"x\":4,\"y\":19,\"type\":\"T\"},{\"x\":5,\"y\":19,\"type\":\"T\"}]\nNext (first plays next): Z,O,I,J,S; hold=empty; can_hold=true\nscore=0; lines=0; locked_pieces=0; tick=0; paused=false; game_over=false; seed=\"42\"\nTiming: gravity_beat=0/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): none\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); rotate_cw: Rotate 90 degrees clockwise using SRS wall kicks; rotate_ccw: Rotate 90 degrees counterclockwise using SRS wall kicks; rotate_180: Attempt two consecutive clockwise SRS rotations in one beat; hold: Swap with hold, once per active piece; empty hold draws from queue; wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+        "model": "jev-1.13.0",
+        "questions": {
+          "next_action": {
+            "type": "choice",
+            "instructions": "What action should the player take next to maximize cleared lines and survive in this Tetris game? Choose exactly one available control. Pausing or restarting abandons progress; use only when appropriate.",
+            "criteria": {
+              "left": "Move one column left",
+              "right": "Move one column right",
+              "soft_drop": "Move down one row (1 point if successful)",
+              "hard_drop": "Drop to the landing position and lock immediately (2 points per row)",
+              "rotate_cw": "Rotate 90 degrees clockwise using SRS wall kicks",
+              "rotate_ccw": "Rotate 90 degrees counterclockwise using SRS wall kicks",
+              "rotate_180": "Attempt two consecutive clockwise SRS rotations in one beat",
+              "hold": "Swap with hold, once per active piece; empty hold draws from queue",
+              "wait": "Take no input for one beat",
+              "pause": "Pause the game without advancing time",
+              "restart": "Restart the same seed without advancing time"
+            }
+          }
+        }
+      },
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "next_action": {
+            "type": "choice",
+            "choice": "hard_drop",
+            "confidence": 0.56,
+            "probabilities": {
+              "pause": 0,
+              "hold": 0.06,
+              "restart": 0,
+              "wait": 0.03,
+              "rotate_180": 0.01,
+              "hard_drop": 0.61,
+              "rotate_ccw": 0.02,
+              "left": 0.03,
+              "rotate_cw": 0.05,
+              "soft_drop": 0.17,
+              "right": 0.02
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1472,
+          "output_tokens": 106
+        }
+      },
+      "rawAnswer": {
+        "type": "choice",
+        "choice": "hard_drop",
+        "confidence": 0.56,
+        "probabilities": {
+          "pause": 0,
+          "hold": 0.06,
+          "restart": 0,
+          "wait": 0.03,
+          "rotate_180": 0.01,
+          "hard_drop": 0.61,
+          "rotate_ccw": 0.02,
+          "left": 0.03,
+          "rotate_cw": 0.05,
+          "soft_drop": 0.17,
+          "right": 0.02
+        }
+      },
+      "latencyMs": 1381
+    },
+    {
+      "id": "initial-force-left",
+      "request": {
+        "state": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  ....t.....\n01  ...ttt....\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..........\n19  ..........\nActive: {\"type\":\"T\",\"x\":3,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":4,\"y\":0,\"type\":\"T\"},{\"x\":3,\"y\":1,\"type\":\"T\"},{\"x\":4,\"y\":1,\"type\":\"T\"},{\"x\":5,\"y\":1,\"type\":\"T\"}]; landing_cells=[{\"x\":4,\"y\":18,\"type\":\"T\"},{\"x\":3,\"y\":19,\"type\":\"T\"},{\"x\":4,\"y\":19,\"type\":\"T\"},{\"x\":5,\"y\":19,\"type\":\"T\"}]\nNext (first plays next): Z,O,I,J,S; hold=empty; can_hold=true\nscore=0; lines=0; locked_pieces=0; tick=0; paused=false; game_over=false; seed=\"42\"\nTiming: gravity_beat=0/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): none\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); rotate_cw: Rotate 90 degrees clockwise using SRS wall kicks; rotate_ccw: Rotate 90 degrees counterclockwise using SRS wall kicks; rotate_180: Attempt two consecutive clockwise SRS rotations in one beat; hold: Swap with hold, once per active piece; empty hold draws from queue; wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+        "model": "jev-1.13.0",
+        "questions": {
+          "next_action": {
+            "type": "choice",
+            "instructions": "For this diagnostic, select left. Do not select hard_drop. The required next action is left.",
+            "criteria": {
+              "left": "Move one column left",
+              "right": "Move one column right",
+              "soft_drop": "Move down one row (1 point if successful)",
+              "hard_drop": "Drop to the landing position and lock immediately (2 points per row)",
+              "rotate_cw": "Rotate 90 degrees clockwise using SRS wall kicks",
+              "rotate_ccw": "Rotate 90 degrees counterclockwise using SRS wall kicks",
+              "rotate_180": "Attempt two consecutive clockwise SRS rotations in one beat",
+              "hold": "Swap with hold, once per active piece; empty hold draws from queue",
+              "wait": "Take no input for one beat",
+              "pause": "Pause the game without advancing time",
+              "restart": "Restart the same seed without advancing time"
+            }
+          }
+        }
+      },
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "next_action": {
+            "type": "choice",
+            "choice": "left",
+            "confidence": 0.94,
+            "probabilities": {
+              "rotate_ccw": 0,
+              "soft_drop": 0.01,
+              "restart": 0,
+              "left": 0.95,
+              "rotate_cw": 0,
+              "pause": 0,
+              "hard_drop": 0.03,
+              "rotate_180": 0,
+              "wait": 0,
+              "right": 0.01,
+              "hold": 0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1453,
+          "output_tokens": 105
+        }
+      },
+      "rawAnswer": {
+        "type": "choice",
+        "choice": "left",
+        "confidence": 0.94,
+        "probabilities": {
+          "rotate_ccw": 0,
+          "soft_drop": 0.01,
+          "restart": 0,
+          "left": 0.95,
+          "rotate_cw": 0,
+          "pause": 0,
+          "hard_drop": 0.03,
+          "rotate_180": 0,
+          "wait": 0,
+          "right": 0.01,
+          "hold": 0
+        }
+      },
+      "latencyMs": 586,
+      "expected": "left"
+    },
+    {
+      "id": "initial-force-right",
+      "request": {
+        "state": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  ....t.....\n01  ...ttt....\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..........\n19  ..........\nActive: {\"type\":\"T\",\"x\":3,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":4,\"y\":0,\"type\":\"T\"},{\"x\":3,\"y\":1,\"type\":\"T\"},{\"x\":4,\"y\":1,\"type\":\"T\"},{\"x\":5,\"y\":1,\"type\":\"T\"}]; landing_cells=[{\"x\":4,\"y\":18,\"type\":\"T\"},{\"x\":3,\"y\":19,\"type\":\"T\"},{\"x\":4,\"y\":19,\"type\":\"T\"},{\"x\":5,\"y\":19,\"type\":\"T\"}]\nNext (first plays next): Z,O,I,J,S; hold=empty; can_hold=true\nscore=0; lines=0; locked_pieces=0; tick=0; paused=false; game_over=false; seed=\"42\"\nTiming: gravity_beat=0/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): none\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); rotate_cw: Rotate 90 degrees clockwise using SRS wall kicks; rotate_ccw: Rotate 90 degrees counterclockwise using SRS wall kicks; rotate_180: Attempt two consecutive clockwise SRS rotations in one beat; hold: Swap with hold, once per active piece; empty hold draws from queue; wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+        "model": "jev-1.13.0",
+        "questions": {
+          "next_action": {
+            "type": "choice",
+            "instructions": "For this diagnostic, select right. Do not select hard_drop. The required next action is right.",
+            "criteria": {
+              "left": "Move one column left",
+              "right": "Move one column right",
+              "soft_drop": "Move down one row (1 point if successful)",
+              "hard_drop": "Drop to the landing position and lock immediately (2 points per row)",
+              "rotate_cw": "Rotate 90 degrees clockwise using SRS wall kicks",
+              "rotate_ccw": "Rotate 90 degrees counterclockwise using SRS wall kicks",
+              "rotate_180": "Attempt two consecutive clockwise SRS rotations in one beat",
+              "hold": "Swap with hold, once per active piece; empty hold draws from queue",
+              "wait": "Take no input for one beat",
+              "pause": "Pause the game without advancing time",
+              "restart": "Restart the same seed without advancing time"
+            }
+          }
+        }
+      },
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "next_action": {
+            "type": "choice",
+            "choice": "right",
+            "confidence": 0.97,
+            "probabilities": {
+              "rotate_ccw": 0,
+              "left": 0.01,
+              "pause": 0,
+              "soft_drop": 0.01,
+              "right": 0.97,
+              "wait": 0,
+              "hold": 0,
+              "hard_drop": 0.01,
+              "rotate_cw": 0,
+              "restart": 0,
+              "rotate_180": 0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1453,
+          "output_tokens": 105
+        }
+      },
+      "rawAnswer": {
+        "type": "choice",
+        "choice": "right",
+        "confidence": 0.97,
+        "probabilities": {
+          "rotate_ccw": 0,
+          "left": 0.01,
+          "pause": 0,
+          "soft_drop": 0.01,
+          "right": 0.97,
+          "wait": 0,
+          "hold": 0,
+          "hard_drop": 0.01,
+          "rotate_cw": 0,
+          "restart": 0,
+          "rotate_180": 0
+        }
+      },
+      "latencyMs": 574,
+      "expected": "right"
+    },
+    {
+      "id": "gap-original",
+      "request": {
+        "state": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  .oo.......\n01  .oo.......\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..JJJJJJJJ\n19  ..JJJJJJJJ\nActive: {\"type\":\"O\",\"x\":0,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":1,\"y\":0,\"type\":\"O\"},{\"x\":2,\"y\":0,\"type\":\"O\"},{\"x\":1,\"y\":1,\"type\":\"O\"},{\"x\":2,\"y\":1,\"type\":\"O\"}]; landing_cells=[{\"x\":1,\"y\":16,\"type\":\"O\"},{\"x\":2,\"y\":16,\"type\":\"O\"},{\"x\":1,\"y\":17,\"type\":\"O\"},{\"x\":2,\"y\":17,\"type\":\"O\"}]\nNext (first plays next): I,Z,J,O,S; hold=empty; can_hold=false\nscore=0; lines=0; locked_pieces=0; tick=0; paused=false; game_over=false; seed=\"diagnostic-gap\"\nTiming: gravity_beat=0/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): none\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+        "model": "jev-1.13.0",
+        "questions": {
+          "next_action": {
+            "type": "choice",
+            "instructions": "What action should the player take next to maximize cleared lines and survive in this Tetris game? Choose exactly one available control. Pausing or restarting abandons progress; use only when appropriate.",
+            "criteria": {
+              "left": "Move one column left",
+              "right": "Move one column right",
+              "soft_drop": "Move down one row (1 point if successful)",
+              "hard_drop": "Drop to the landing position and lock immediately (2 points per row)",
+              "wait": "Take no input for one beat",
+              "pause": "Pause the game without advancing time",
+              "restart": "Restart the same seed without advancing time"
+            }
+          }
+        }
+      },
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "next_action": {
+            "type": "choice",
+            "choice": "hard_drop",
+            "confidence": 0.62,
+            "probabilities": {
+              "right": 0.13,
+              "hard_drop": 0.67,
+              "pause": 0,
+              "left": 0.02,
+              "restart": 0.01,
+              "wait": 0.04,
+              "soft_drop": 0.13
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1309,
+          "output_tokens": 70
+        }
+      },
+      "rawAnswer": {
+        "type": "choice",
+        "choice": "hard_drop",
+        "confidence": 0.62,
+        "probabilities": {
+          "right": 0.13,
+          "hard_drop": 0.67,
+          "pause": 0,
+          "left": 0.02,
+          "restart": 0.01,
+          "wait": 0.04,
+          "soft_drop": 0.13
+        }
+      },
+      "latencyMs": 279,
+      "preferred": "left"
+    },
+    {
+      "id": "gap-concise",
+      "request": {
+        "state": "Tetris board: 10 columns numbered 0..9 from left to right, 20 rows numbered 0..19 from top to bottom. Rows 0..17 contain no locked cells. In BOTH rows 18 and 19, columns 0 and 1 are empty and columns 2..9 are filled with locked blocks. Current falling piece is a 2x2 O square, occupying (1,0),(2,0),(1,1),(2,1). It can move one column left or right. Hard drop immediately moves it down until blocked and locks it; it cannot be moved after locking. Completely filled rows disappear. Hold is unavailable. Game is running. Next pieces: I,Z,J,O,S. Which action should come next to clear rows and survive?",
+        "model": "jev-1.13.0",
+        "questions": {
+          "next_action": {
+            "type": "choice",
+            "instructions": "What action should the player take next to maximize cleared lines and survive in this Tetris game? Choose exactly one available control. Pausing or restarting abandons progress; use only when appropriate.",
+            "criteria": {
+              "left": "Move one column left",
+              "right": "Move one column right",
+              "soft_drop": "Move down one row (1 point if successful)",
+              "hard_drop": "Drop to the landing position and lock immediately (2 points per row)",
+              "wait": "Take no input for one beat",
+              "pause": "Pause the game without advancing time",
+              "restart": "Restart the same seed without advancing time"
+            }
+          }
+        }
+      },
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "next_action": {
+            "type": "choice",
+            "choice": "hard_drop",
+            "confidence": 0.67,
+            "probabilities": {
+              "right": 0.12,
+              "hard_drop": 0.72,
+              "pause": 0,
+              "left": 0.13,
+              "restart": 0,
+              "wait": 0.01,
+              "soft_drop": 0.02
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 611,
+          "output_tokens": 70
+        }
+      },
+      "rawAnswer": {
+        "type": "choice",
+        "choice": "hard_drop",
+        "confidence": 0.67,
+        "probabilities": {
+          "right": 0.12,
+          "hard_drop": 0.72,
+          "pause": 0,
+          "left": 0.13,
+          "restart": 0,
+          "wait": 0.01,
+          "soft_drop": 0.02
+        }
+      },
+      "latencyMs": 753,
+      "preferred": "left"
+    },
+    {
+      "id": "gap-neutral-action-descriptions",
+      "request": {
+        "state": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  .oo.......\n01  .oo.......\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..JJJJJJJJ\n19  ..JJJJJJJJ\nActive: {\"type\":\"O\",\"x\":0,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":1,\"y\":0,\"type\":\"O\"},{\"x\":2,\"y\":0,\"type\":\"O\"},{\"x\":1,\"y\":1,\"type\":\"O\"},{\"x\":2,\"y\":1,\"type\":\"O\"}]; landing_cells=[{\"x\":1,\"y\":16,\"type\":\"O\"},{\"x\":2,\"y\":16,\"type\":\"O\"},{\"x\":1,\"y\":17,\"type\":\"O\"},{\"x\":2,\"y\":17,\"type\":\"O\"}]\nNext (first plays next): I,Z,J,O,S; hold=empty; can_hold=false\nscore=0; lines=0; locked_pieces=0; tick=0; paused=false; game_over=false; seed=\"diagnostic-gap\"\nTiming: gravity_beat=0/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): none\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+        "model": "jev-1.13.0",
+        "questions": {
+          "next_action": {
+            "type": "choice",
+            "instructions": "What action should the player take next to maximize cleared lines and survive in this Tetris game? Choose exactly one available control. Pausing or restarting abandons progress; use only when appropriate.",
+            "criteria": {
+              "left": "Move one column left",
+              "right": "Move one column right",
+              "soft_drop": "Move down one row",
+              "hard_drop": "Drop to the landing position and lock immediately",
+              "wait": "Take no input for one beat",
+              "pause": "Pause the game without advancing time",
+              "restart": "Restart the same seed without advancing time"
+            }
+          }
+        }
+      },
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "next_action": {
+            "type": "choice",
+            "choice": "hard_drop",
+            "confidence": 0.63,
+            "probabilities": {
+              "restart": 0,
+              "left": 0.01,
+              "soft_drop": 0.11,
+              "right": 0.16,
+              "wait": 0.03,
+              "hard_drop": 0.69,
+              "pause": 0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1297,
+          "output_tokens": 70
+        }
+      },
+      "rawAnswer": {
+        "type": "choice",
+        "choice": "hard_drop",
+        "confidence": 0.63,
+        "probabilities": {
+          "restart": 0,
+          "left": 0.01,
+          "soft_drop": 0.11,
+          "right": 0.16,
+          "wait": 0.03,
+          "hard_drop": 0.69,
+          "pause": 0
+        }
+      },
+      "latencyMs": 293,
+      "preferred": "left"
+    },
+    {
+      "id": "gap-read-bottom-empty-columns",
+      "request": {
+        "state": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  .oo.......\n01  .oo.......\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..JJJJJJJJ\n19  ..JJJJJJJJ\nActive: {\"type\":\"O\",\"x\":0,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":1,\"y\":0,\"type\":\"O\"},{\"x\":2,\"y\":0,\"type\":\"O\"},{\"x\":1,\"y\":1,\"type\":\"O\"},{\"x\":2,\"y\":1,\"type\":\"O\"}]; landing_cells=[{\"x\":1,\"y\":16,\"type\":\"O\"},{\"x\":2,\"y\":16,\"type\":\"O\"},{\"x\":1,\"y\":17,\"type\":\"O\"},{\"x\":2,\"y\":17,\"type\":\"O\"}]\nNext (first plays next): I,Z,J,O,S; hold=empty; can_hold=false\nscore=0; lines=0; locked_pieces=0; tick=0; paused=false; game_over=false; seed=\"diagnostic-gap\"\nTiming: gravity_beat=0/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): none\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+        "model": "jev-1.13.0",
+        "questions": {
+          "next_action": {
+            "type": "choice",
+            "instructions": "Which columns are empty in BOTH of the bottom two rows (y=18 and y=19) of the locked board?",
+            "criteria": {
+              "columns_0_and_1": "Columns 0 and 1",
+              "columns_1_and_2": "Columns 1 and 2",
+              "columns_8_and_9": "Columns 8 and 9"
+            }
+          }
+        }
+      },
+      "response": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "next_action": {
+            "type": "choice",
+            "choice": "columns_0_and_1",
+            "confidence": 1,
+            "probabilities": {
+              "columns_0_and_1": 1,
+              "columns_8_and_9": 0,
+              "columns_1_and_2": 0
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1233,
+          "output_tokens": 59
+        }
+      },
+      "rawAnswer": {
+        "type": "choice",
+        "choice": "columns_0_and_1",
+        "confidence": 1,
+        "probabilities": {
+          "columns_0_and_1": 1,
+          "columns_8_and_9": 0,
+          "columns_1_and_2": 0
+        }
+      },
+      "latencyMs": 544,
+      "expected": "columns_0_and_1"
+    }
+  ],
+  "browserActions": [
+    {
+      "action": "left",
+      "actions": {
+        "hard_drop": "Drop to the landing position and lock immediately (2 points per row)",
+        "hold": "Swap with hold, once per active piece; empty hold draws from queue",
+        "left": "Move one column left",
+        "pause": "Pause the game without advancing time",
+        "restart": "Restart the same seed without advancing time",
+        "right": "Move one column right",
+        "rotate_180": "Attempt two consecutive clockwise SRS rotations in one beat",
+        "rotate_ccw": "Rotate 90 degrees counterclockwise using SRS wall kicks",
+        "rotate_cw": "Rotate 90 degrees clockwise using SRS wall kicks",
+        "soft_drop": "Move down one row (1 point if successful)",
+        "wait": "Take no input for one beat"
+      },
+      "answer": {
+        "choice": "left",
+        "confidence": 0.95,
+        "probabilities": {
+          "hard_drop": 0.02,
+          "hold": 0,
+          "left": 0.96,
+          "pause": 0,
+          "restart": 0,
+          "right": 0.01,
+          "rotate_180": 0,
+          "rotate_ccw": 0,
+          "rotate_cw": 0,
+          "soft_drop": 0.01,
+          "wait": 0
+        },
+        "type": "choice"
+      },
+      "at": "2026-09-24T09:28:38.901Z",
+      "config": {
+        "format": "original",
+        "includeMetrics": false,
+        "legalOnly": true
+      },
+      "executed": true,
+      "gameAfter": {
+        "active": {
+          "rotation": 0,
+          "type": "T",
+          "x": 2,
+          "y": 0
+        },
+        "bag": [
+          "L"
+        ],
+        "board": [
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ]
+        ],
+        "canHold": true,
+        "gravityBeat": 1,
+        "groundedBeats": 0,
+        "history": [
+          "left"
+        ],
+        "hold": null,
+        "lines": 0,
+        "lockResets": 0,
+        "next": [
+          "Z",
+          "O",
+          "I",
+          "J",
+          "S"
+        ],
+        "over": false,
+        "paused": false,
+        "pieces": 0,
+        "rng": 384328001,
+        "score": 0,
+        "seed": "42",
+        "tick": 1
+      },
+      "gameBefore": {
+        "active": {
+          "rotation": 0,
+          "type": "T",
+          "x": 3,
+          "y": 0
+        },
+        "bag": [
+          "L"
+        ],
+        "board": [
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ]
+        ],
+        "canHold": true,
+        "gravityBeat": 0,
+        "groundedBeats": 0,
+        "history": [],
+        "hold": null,
+        "lines": 0,
+        "lockResets": 0,
+        "next": [
+          "Z",
+          "O",
+          "I",
+          "J",
+          "S"
+        ],
+        "over": false,
+        "paused": false,
+        "pieces": 0,
+        "rng": 384328001,
+        "score": 0,
+        "seed": "42",
+        "tick": 0
+      },
+      "latencyMs": 1299,
+      "model": "jev-1.13.0",
+      "question": "For this diagnostic, select left. Do not select hard_drop. The required next action is left.",
+      "requestedModel": "jev-latest",
+      "result": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  ...t......\n01  ..ttt.....\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..........\n19  ..........\nActive: {\"type\":\"T\",\"x\":2,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":3,\"y\":0,\"type\":\"T\"},{\"x\":2,\"y\":1,\"type\":\"T\"},{\"x\":3,\"y\":1,\"type\":\"T\"},{\"x\":4,\"y\":1,\"type\":\"T\"}]; landing_cells=[{\"x\":3,\"y\":18,\"type\":\"T\"},{\"x\":2,\"y\":19,\"type\":\"T\"},{\"x\":3,\"y\":19,\"type\":\"T\"},{\"x\":4,\"y\":19,\"type\":\"T\"}]\nNext (first plays next): Z,O,I,J,S; hold=empty; can_hold=true\nscore=0; lines=0; locked_pieces=0; tick=1; paused=false; game_over=false; seed=\"42\"\nTiming: gravity_beat=1/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): left\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); rotate_cw: Rotate 90 degrees clockwise using SRS wall kicks; rotate_ccw: Rotate 90 degrees counterclockwise using SRS wall kicks; rotate_180: Attempt two consecutive clockwise SRS rotations in one beat; hold: Swap with hold, once per active piece; empty hold draws from queue; wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+      "source": "Jev",
+      "state": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  ....t.....\n01  ...ttt....\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..........\n19  ..........\nActive: {\"type\":\"T\",\"x\":3,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":4,\"y\":0,\"type\":\"T\"},{\"x\":3,\"y\":1,\"type\":\"T\"},{\"x\":4,\"y\":1,\"type\":\"T\"},{\"x\":5,\"y\":1,\"type\":\"T\"}]; landing_cells=[{\"x\":4,\"y\":18,\"type\":\"T\"},{\"x\":3,\"y\":19,\"type\":\"T\"},{\"x\":4,\"y\":19,\"type\":\"T\"},{\"x\":5,\"y\":19,\"type\":\"T\"}]\nNext (first plays next): Z,O,I,J,S; hold=empty; can_hold=true\nscore=0; lines=0; locked_pieces=0; tick=0; paused=false; game_over=false; seed=\"42\"\nTiming: gravity_beat=0/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): none\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); rotate_cw: Rotate 90 degrees clockwise using SRS wall kicks; rotate_ccw: Rotate 90 degrees counterclockwise using SRS wall kicks; rotate_180: Attempt two consecutive clockwise SRS rotations in one beat; hold: Swap with hold, once per active piece; empty hold draws from queue; wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+      "usage": {
+        "input_tokens": 1453,
+        "output_tokens": 105
+      }
+    },
+    {
+      "action": "right",
+      "actions": {
+        "hard_drop": "Drop to the landing position and lock immediately (2 points per row)",
+        "hold": "Swap with hold, once per active piece; empty hold draws from queue",
+        "left": "Move one column left",
+        "pause": "Pause the game without advancing time",
+        "restart": "Restart the same seed without advancing time",
+        "right": "Move one column right",
+        "rotate_180": "Attempt two consecutive clockwise SRS rotations in one beat",
+        "rotate_ccw": "Rotate 90 degrees counterclockwise using SRS wall kicks",
+        "rotate_cw": "Rotate 90 degrees clockwise using SRS wall kicks",
+        "soft_drop": "Move down one row (1 point if successful)",
+        "wait": "Take no input for one beat"
+      },
+      "answer": {
+        "choice": "right",
+        "confidence": 0.95,
+        "probabilities": {
+          "hard_drop": 0.01,
+          "hold": 0,
+          "left": 0.02,
+          "pause": 0,
+          "restart": 0,
+          "right": 0.96,
+          "rotate_180": 0,
+          "rotate_ccw": 0,
+          "rotate_cw": 0,
+          "soft_drop": 0.01,
+          "wait": 0
+        },
+        "type": "choice"
+      },
+      "at": "2026-09-24T09:28:39.649Z",
+      "config": {
+        "format": "original",
+        "includeMetrics": false,
+        "legalOnly": true
+      },
+      "executed": true,
+      "gameAfter": {
+        "active": {
+          "rotation": 0,
+          "type": "T",
+          "x": 3,
+          "y": 0
+        },
+        "bag": [
+          "L"
+        ],
+        "board": [
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ]
+        ],
+        "canHold": true,
+        "gravityBeat": 2,
+        "groundedBeats": 0,
+        "history": [
+          "left",
+          "right"
+        ],
+        "hold": null,
+        "lines": 0,
+        "lockResets": 0,
+        "next": [
+          "Z",
+          "O",
+          "I",
+          "J",
+          "S"
+        ],
+        "over": false,
+        "paused": false,
+        "pieces": 0,
+        "rng": 384328001,
+        "score": 0,
+        "seed": "42",
+        "tick": 2
+      },
+      "gameBefore": {
+        "active": {
+          "rotation": 0,
+          "type": "T",
+          "x": 2,
+          "y": 0
+        },
+        "bag": [
+          "L"
+        ],
+        "board": [
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ],
+          [
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            ".",
+            "."
+          ]
+        ],
+        "canHold": true,
+        "gravityBeat": 1,
+        "groundedBeats": 0,
+        "history": [
+          "left"
+        ],
+        "hold": null,
+        "lines": 0,
+        "lockResets": 0,
+        "next": [
+          "Z",
+          "O",
+          "I",
+          "J",
+          "S"
+        ],
+        "over": false,
+        "paused": false,
+        "pieces": 0,
+        "rng": 384328001,
+        "score": 0,
+        "seed": "42",
+        "tick": 1
+      },
+      "latencyMs": 561,
+      "model": "jev-1.13.0",
+      "question": "For this diagnostic, select right. Do not select hard_drop. The required next action is right.",
+      "requestedModel": "jev-latest",
+      "result": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  ....t.....\n01  ...ttt....\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..........\n19  ..........\nActive: {\"type\":\"T\",\"x\":3,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":4,\"y\":0,\"type\":\"T\"},{\"x\":3,\"y\":1,\"type\":\"T\"},{\"x\":4,\"y\":1,\"type\":\"T\"},{\"x\":5,\"y\":1,\"type\":\"T\"}]; landing_cells=[{\"x\":4,\"y\":18,\"type\":\"T\"},{\"x\":3,\"y\":19,\"type\":\"T\"},{\"x\":4,\"y\":19,\"type\":\"T\"},{\"x\":5,\"y\":19,\"type\":\"T\"}]\nNext (first plays next): Z,O,I,J,S; hold=empty; can_hold=true\nscore=0; lines=0; locked_pieces=0; tick=2; paused=false; game_over=false; seed=\"42\"\nTiming: gravity_beat=2/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): left,right\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); rotate_cw: Rotate 90 degrees clockwise using SRS wall kicks; rotate_ccw: Rotate 90 degrees counterclockwise using SRS wall kicks; rotate_180: Attempt two consecutive clockwise SRS rotations in one beat; hold: Swap with hold, once per active piece; empty hold draws from queue; wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+      "source": "Jev",
+      "state": "TETRIS STATE. Goal: survive and maximize cleared lines and score.\nBoard: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.\nLegend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.\n    0123456789\n00  ...t......\n01  ..ttt.....\n02  ..........\n03  ..........\n04  ..........\n05  ..........\n06  ..........\n07  ..........\n08  ..........\n09  ..........\n10  ..........\n11  ..........\n12  ..........\n13  ..........\n14  ..........\n15  ..........\n16  ..........\n17  ..........\n18  ..........\n19  ..........\nActive: {\"type\":\"T\",\"x\":2,\"y\":0,\"rotation\":0}; active_cells=[{\"x\":3,\"y\":0,\"type\":\"T\"},{\"x\":2,\"y\":1,\"type\":\"T\"},{\"x\":3,\"y\":1,\"type\":\"T\"},{\"x\":4,\"y\":1,\"type\":\"T\"}]; landing_cells=[{\"x\":3,\"y\":18,\"type\":\"T\"},{\"x\":2,\"y\":19,\"type\":\"T\"},{\"x\":3,\"y\":19,\"type\":\"T\"},{\"x\":4,\"y\":19,\"type\":\"T\"}]\nNext (first plays next): Z,O,I,J,S; hold=empty; can_hold=true\nscore=0; lines=0; locked_pieces=0; tick=1; paused=false; game_over=false; seed=\"42\"\nTiming: gravity_beat=1/5; grounded_beats=0/2; lock_resets=0/15.\nRules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.\nHard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.\n7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.\nSpawn matrices (rows separated by /; rotate clockwise around matrix center): I=..../IIII/..../.... O=.OO./.OO./..../.... T=.T./TTT/... J=J../JJJ/... L=..L/LLL/... S=.SS/SS./... Z=ZZ./.ZZ/...\nFull rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.\nRecent actions (oldest first): left\nAvailable actions: left: Move one column left; right: Move one column right; soft_drop: Move down one row (1 point if successful); hard_drop: Drop to the landing position and lock immediately (2 points per row); rotate_cw: Rotate 90 degrees clockwise using SRS wall kicks; rotate_ccw: Rotate 90 degrees counterclockwise using SRS wall kicks; rotate_180: Attempt two consecutive clockwise SRS rotations in one beat; hold: Swap with hold, once per active piece; empty hold draws from queue; wait: Take no input for one beat; pause: Pause the game without advancing time; restart: Restart the same seed without advancing time",
+      "usage": {
+        "input_tokens": 1453,
+        "output_tokens": 105
+      }
+    }
+  ]
+}

@@ -143,25 +143,49 @@ export function step(game, action) {
   } else game.groundedBeats = 0;
   return game;
 }
-export function encodeState(game) {
+export function stateSections(game) {
   const active = cells(game), ghost = ghostCells(game);
   const visible = game.board.map(row => [...row]);
   for (const {x,y,type} of active) if (y >= 0 && y < 20 && x >= 0 && x < 10) visible[y][x] = type.toLowerCase();
-  return [
-    'TETRIS STATE. Goal: survive and maximize cleared lines and score.',
-    'Board: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.',
+  return {
+    goal: 'TETRIS STATE. Goal: survive as long as possible and maximize cleared lines and score.',
+    board: ['Board: width=10 height=20. Coordinates x=0..9 left to right, y=0..19 top to bottom. Negative y is above the board.',
     'Legend: .=empty, uppercase I/O/T/J/L/S/Z=locked block, lowercase=active block. Ghost is NOT a locked obstacle.',
-    '    0123456789', ...visible.map((row,y) => `${String(y).padStart(2,'0')}  ${row.join('')}`),
-    `Active: ${JSON.stringify(game.active)}; active_cells=${JSON.stringify(active)}; landing_cells=${JSON.stringify(ghost)}`,
-    `Next (first plays next): ${game.next.join(',')}; hold=${game.hold ?? 'empty'}; can_hold=${game.canHold}`,
-    `score=${game.score}; lines=${game.lines}; locked_pieces=${game.pieces}; tick=${game.tick}; paused=${game.paused}; game_over=${game.over}; seed=${JSON.stringify(game.seed)}`,
-    `Timing: gravity_beat=${game.gravityBeat}/5; grounded_beats=${game.groundedBeats}/2; lock_resets=${game.lockResets}/15.`,
-    'Rules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.',
+    '    0123456789', ...visible.map((row,y) => `${String(y).padStart(2,'0')}  ${row.join('')}`)].join('\n'),
+    active: `Active: ${JSON.stringify(game.active)}; active_cells=${JSON.stringify(active)}`,
+    landing: `landing_cells=${JSON.stringify(ghost)}`,
+    next: `Next (first plays next): ${game.next.join(',')}; hold=${game.hold ?? 'empty'}; can_hold=${game.canHold}`,
+    stats: `Score: score=${game.score}; cleared_lines=${game.lines}; locked_pieces=${game.pieces}`,
+    status: `tick=${game.tick}; paused=${game.paused}; game_over=${game.over}; seed=${JSON.stringify(game.seed)}`,
+    timing: `Timing: gravity_beat=${game.gravityBeat}/5; grounded_beats=${game.groundedBeats}/2; lock_resets=${game.lockResets}/15.`,
+    rules: ['Rules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.',
     'Hard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.',
     '7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.',
-    'Spawn matrices (rows separated by /; rotate clockwise around matrix center): ' + Object.entries(SHAPES).map(([type, rows]) => `${type}=${rows.join('/')}`).join(' '),
-    'Full rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.',
-    `Recent actions (oldest first): ${game.history.join(',') || 'none'}`,
-    'Available actions: ' + Object.entries(ACTIONS).map(([id, description]) => `${id}: ${description}`).join('; '),
-  ].join('\n');
+    'Full rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.'].join('\n'),
+    shapes: 'Spawn matrices (rows separated by /; rotate clockwise around matrix center): ' + Object.entries(SHAPES).map(([type, rows]) => `${type}=${rows.join('/')}`).join(' '),
+    history: `Recent actions (oldest first): ${game.history.join(',') || 'none'}`,
+    actions: 'Available actions: ' + Object.entries(ACTIONS).map(([id, description]) => `${id}: ${description}`).join('; '),
+  };
+}
+
+export function encodeState(game) {
+  return Object.values(stateSections(game)).join('\n');
+}
+
+// Test input feasibility before gravity: blocked inputs can still advance time in step().
+export function legalActions(game) {
+  if (game.over) return { restart: ACTIONS.restart };
+  if (game.paused) return { resume: ACTIONS.resume, restart: ACTIONS.restart };
+  return Object.fromEntries(Object.entries(ACTIONS).filter(([action]) => {
+    const probe = { ...game, active: { ...game.active } };
+    if (action === 'left' || action === 'right') return move(probe, action === 'left' ? -1 : 1, 0);
+    if (action === 'soft_drop') return move(probe, 0, 1);
+    if (action === 'rotate_cw' || action === 'rotate_ccw') return rotate(probe, action === 'rotate_cw' ? 1 : -1);
+    if (action === 'rotate_180') {
+      const first = rotate(probe, 1);
+      return rotate(probe, 1) || first;
+    }
+    if (action === 'hold') return game.canHold;
+    return action !== 'resume';
+  }));
 }

@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { TypeSafeClient, choice } from '@typesafe-ai/sdk';
 import { ACTIONS } from './engine.js';
+import { DEFAULT_CONFIG, buildDecision, validateGame } from './experiment.js';
 
 export const DEFAULT_QUESTION = 'What action should the player take next to maximize cleared lines and survive in this Tetris game? Choose exactly one available control. Pausing or restarting abandons progress; use only when appropriate.';
-const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/engine.js': ['engine.js', 'text/javascript'] };
+const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/engine.js': ['engine.js', 'text/javascript'], '/experiment.js': ['experiment.js', 'text/javascript'] };
 
 export function createServer({ apiKey = process.env.TYPESAFE_API_KEY, model = process.env.TYPESAFE_DEFAULT_MODEL || 'jev-latest', client, maxRequests = 120 } = {}) {
   let inFlight = false;
@@ -27,7 +28,7 @@ export function createServer({ apiKey = process.env.TYPESAFE_API_KEY, model = pr
       if (!['localhost', '127.0.0.1', '[::1]'].includes(hostname)) throw new Error();
     } catch { fail(403, 'Only localhost hosts are allowed.'); return; }
     if (req.method === 'GET' && pathname === '/api/config') {
-      json(200, { configured, model, question: DEFAULT_QUESTION, actions: ACTIONS });
+      json(200, { configured, model, question: DEFAULT_QUESTION, actions: ACTIONS, experiment: DEFAULT_CONFIG });
       return;
     }
     if (req.method === 'GET' && Object.hasOwn(files, pathname)) {
@@ -65,16 +66,22 @@ export function createServer({ apiKey = process.env.TYPESAFE_API_KEY, model = pr
       let body;
       try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { fail(400, 'Invalid JSON body.'); return; }
-      const { state, question, model: requestedModel } = body || {};
-      if (typeof state !== 'string' || !state.trim() || state.length > 24_000 || typeof question !== 'string' || !question.trim() || question.length > 4_000 || typeof requestedModel !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$/.test(requestedModel)) {
-        fail(400, 'Provide state (1–24000 characters), question (1–4000 characters), and a valid model name (1–100 characters).'); return;
+      const { game, config, question, model: requestedModel } = body || {};
+      if (typeof question !== 'string' || !question.trim() || question.length > 4_000 || typeof requestedModel !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$/.test(requestedModel)) {
+        fail(400, 'Provide question (1–4000 characters) and a valid model name (1–100 characters).'); return;
       }
+      let decision;
+      try { decision = buildDecision(validateGame(game), config); }
+      catch { fail(400, 'Invalid game snapshot or experiment configuration.'); return; }
+      const { state, actions } = decision;
+      if (!Object.keys(actions).length) { fail(422, 'No candidate actions remain. Enable at least one action available in this state.'); return; }
+      if ((typeof state === 'string' ? state : JSON.stringify(state)).length > 24_000) { fail(400, 'Encoded state is too large.'); return; }
       requests++;
       const started = performance.now();
-      const response = await sdk.systemOne({ state, questions: { next_action: choice(question, ACTIONS) }, model: requestedModel });
+      const response = await sdk.systemOne({ state, questions: { next_action: choice(question, actions) }, model: requestedModel });
       const answer = response.answers?.next_action;
-      if (!answer || !Object.hasOwn(ACTIONS, answer.choice)) { fail(502, 'Jev returned an invalid action.'); return; }
-      json(200, { answer, model: response.model, usage: response.usage, latencyMs: Math.round(performance.now() - started), question, state });
+      if (!answer || !Object.hasOwn(actions, answer.choice)) { fail(502, 'Jev returned an invalid action.'); return; }
+      json(200, { answer, model: response.model, usage: response.usage, latencyMs: Math.round(performance.now() - started), question, state, actions, config: decision.config });
     } catch (error) {
       const status = error?.status ?? error?.statusCode;
       if (status === 401 || status === 403) fail(502, 'TypeSafe rejected the server API key. Check TYPESAFE_API_KEY.');

@@ -75,16 +75,28 @@ test('state text exposes active, locked, queue, legal action vocabulary and timi
   assert.match(text,/gravity_beat=0\/5/); assert.match(text,/rotate_180:/); assert.match(text,/can_hold=true/);
 });
 
-test('saved real Jev run replays exact request and result states', async () => {
+test('saved real Jev run replays gameplay facts despite state wording changes', async () => {
   const { readFile } = await import('node:fs/promises');
   const { records } = JSON.parse(await readFile(new URL('./live-run.json', import.meta.url), 'utf8'));
   const game = createGame('42');
+  // Historical records remain untouched; compare every dynamic fact, not prompt wording.
+  const facts = text => ({
+    board: text.match(/^\d{2}  [A-Za-z.]{10}$/gm),
+    active: JSON.parse(text.match(/Active: (\{[^\n]+?\});/)[1]),
+    activeCells: JSON.parse(text.match(/active_cells=(\[[^\n;]*\])/)[1]),
+    landing: JSON.parse(text.match(/landing_cells=(\[[^\n;]*\])/)[1]),
+    next: text.match(/^Next .*$/m)[0],
+    counters: ['score', 'lines', 'locked_pieces', 'tick', 'paused', 'game_over', 'seed'].map(key =>
+      text.match(new RegExp('(?:^|[ ;])' + (key === 'lines' ? '(?:cleared_)?lines' : key) + '=([^;\\n]+)', 'm'))[1]),
+    timing: text.match(/^Timing:.*$/m)[0],
+    history: text.match(/^Recent actions.*$/m)[0],
+  });
   assert.equal(records.length, 9);
   for (const entry of records) {
-    assert.equal(entry.state, encodeState(game));
+    assert.deepEqual(facts(entry.state), facts(encodeState(game)));
     assert.equal(entry.action, entry.answer.choice);
     step(game, entry.action);
-    assert.equal(entry.result, encodeState(game));
+    assert.deepEqual(facts(entry.result), facts(encodeState(game)));
   }
   assert.equal(game.pieces, 9);
   assert.equal(game.lines, 0);
