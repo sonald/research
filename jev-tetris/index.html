@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jev / TETRIS — Decision playground</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
+<body>
+<header><a href="/" class="brand">Jev / <span>TETRIS</span></a><span>Decision playground</span></header>
+<main>
+<section class="intro"><h1>每一步，交给 Jev。</h1><p>用文本棋盘，观察模型如何做决定。</p></section>
+<div class="workspace">
+<aside class="stats panel"><h2>游戏状态</h2><div class="counters"><div><span>SCORE</span><strong id="score">0000</strong></div><div><span>LINES</span><strong id="lines">0</strong></div><div><span>PIECES</span><strong id="pieces">0</strong></div></div><div class="preview-section"><span>HOLD</span><div id="hold" class="mini">空</div></div><div class="preview-section"><span>NEXT</span><div id="next"></div></div></aside>
+<section class="game panel"><div class="board-heading"><span>TETRIS BOARD <b>10 × 20</b></span><span id="beat">BEAT 0</span></div><div class="board-wrap"><div id="board" role="img" aria-label="俄罗斯方块棋盘"></div><div id="overlay" hidden></div></div><div class="controls"><h2>键盘控制</h2><div id="game-controls"></div><div class="game-footer"><button id="pause">暂停 P</button><button id="restart">重新开始 R</button></div><p>每个操作推进一拍；每 5 拍下落一格。<br>按住方向键连续移动。Space 硬降 · C 暂存</p><label class="realtime"><input id="realtime" type="checkbox"> 自动时钟 <span>每 150ms 推进一拍</span></label></div></section>
+<section class="inspector panel"><h2>控制模式</h2><div class="segments"><button id="manual-mode" aria-pressed="true">手动游玩</button><button id="jev-mode" aria-pressed="false">Jev（模型决策）</button></div><div class="run-buttons"><button id="ask" class="primary">▶ Jev 下一步<small>让模型选择并执行下一个动作</small></button><button id="auto" class="accent">▶▶ 连续运行<small>让模型持续进行游戏</small></button></div>
+<div class="status-section"><div class="status-title"><h2>当前状态</h2><span id="status" role="status" aria-live="polite">正在连接服务…</span></div><p id="notice">一次请求，一个动作。等待模型时棋盘冻结。</p></div>
+<section class="distribution-section"><div class="section-title"><h2>动作分布（下一步）</h2><span id="latency"></span></div><div id="distribution" class="empty">暂无动作分布<small>点击「Jev 下一步」查看每个动作的概率。</small></div><div id="confidence"></div></section>
+<section class="data-panel"><div class="tabs" role="tablist"><button id="state-tab" role="tab" aria-selected="true" aria-controls="state-panel">STATE</button><button id="log-tab" role="tab" aria-selected="false" aria-controls="log-panel">决策记录 <span id="log-count">0</span></button></div><div id="state-panel" role="tabpanel"><div class="state-tools"><span id="state-label">当前棋盘 · 下一次请求的 state</span><button id="copy">复制</button></div><pre id="state" tabindex="0"></pre></div><div id="log-panel" role="tabpanel" hidden><div id="logs" tabindex="0">尚无记录。手动操作和 Jev 决策都会保留。</div></div></section>
+<section class="settings"><h2>实验设置</h2><div class="settings-row"><label>随机种子 <input id="seed" value="42" maxlength="80"></label><button id="new-seed">应用并重开</button><button id="export">↓ 导出记录</button></div><div class="settings-row"><label>连续步数上限 <input id="limit" type="number" value="50" min="1" max="500"></label><span id="budget">0 次 Jev 决策</span></div><details><summary>模型与提问</summary><label>模型<input id="model" value="jev-latest" maxlength="100"></label><label>下一步执行什么动作？<textarea id="question" rows="4" maxlength="4000"></textarea></label><p>展示的是动作概率，不是思维链。置信度不等于行动正确率。</p></details></section>
+</section></div>
+<footer><span>同一棋盘，同一套操作。没有额外的落点搜索或代打策略。</span><span id="model-footer">TypeSafe SDK / Jev</span></footer>
+</main></body></html>
