@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #f7f8f6;
+        color: #16201f;
+        font-family: sans-serif;
+      }
+
+      body {
+        letter-spacing: 0;
+      }
+
+      .mono,
+      code {
+        font-family: monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          linear-gradient(90deg, rgba(87, 117, 144, 0.08) 1px, rgba(247, 248, 246, 0) 1px),
+          linear-gradient(180deg, rgba(87, 117, 144, 0.08) 1px, rgba(247, 248, 246, 0) 1px),
+          #f7f8f6;
+        background-size: 34px 34px;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          linear-gradient(90deg, rgba(87, 117, 144, 0.08) 1px, rgba(247, 248, 246, 0) 1px),
+          linear-gradient(180deg, rgba(87, 117, 144, 0.08) 1px, rgba(247, 248, 246, 0) 1px),
+          #f7f8f6;
+        background-size: 34px 34px;
+      }
+
+      .scene:not(#scene-1) {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .content {
+        width: 100%;
+        height: 100%;
+        padding: 78px 104px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 34px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        width: max-content;
+        min-height: 44px;
+        padding: 8px 14px;
+        border: 1px solid #d9dfdb;
+        border-radius: 8px;
+        background: #ffffff;
+        color: #5f6d69;
+        font-size: 20px;
+        box-shadow: 0 10px 28px rgba(31, 45, 42, 0.08);
+      }
+
+      .copy,
+      .content > div:first-child {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 26px;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #0d9488;
+        box-shadow: 18px 0 0 #d94645, 36px 0 0 #577590;
+      }
+
+      .headline {
+        margin: 0;
+        max-width: 1040px;
+        color: #16201f;
+        font-size: 104px;
+        line-height: 0.98;
+        font-weight: 870;
+      }
+
+      .subcopy {
+        margin: 0;
+        max-width: 780px;
+        color: #5f6d69;
+        font-size: 30px;
+        line-height: 1.36;
+      }
+
+      .two-up {
+        display: grid;
+        grid-template-columns: minmax(0, 0.92fr) minmax(720px, 1.08fr);
+        align-items: center;
+        gap: 64px;
+      }
+
+      .product-stage {
+        position: relative;
+        min-height: 620px;
+        border: 1px solid #d9dfdb;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 18px 50px rgba(31, 45, 42, 0.12);
+        overflow: hidden;
+      }
+
+      .stage-topbar {
+        height: 72px;
+        padding: 15px 24px;
+        border-bottom: 1px solid #d9dfdb;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        background: #fbfcfb;
+      }
+
+      .toggle {
+        display: inline-grid;
+        grid-template-columns: 118px 150px;
+        border: 1px solid #d9dfdb;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .toggle span {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        font-size: 20px;
+        color: #5f6d69;
+      }
+
+      .toggle span:first-child {
+        color: #16201f;
+        background: #e5ebe8;
+        font-weight: 780;
+      }
+
+      .progress {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 14px;
+        width: 450px;
+        color: #5f6d69;
+        font-size: 20px;
+      }
+
+      .progress-track {
+        height: 10px;
+        border-radius: 999px;
+        background: #e5ebe8;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0d9488, #d94645);
+      }
+
+      .lanes {
+        position: relative;
+        display: grid;
+        grid-template-columns: 250px 1fr 250px;
+        gap: 24px;
+        padding: 44px 40px;
+        min-height: 548px;
+      }
+
+      .entity {
+        border: 2px solid currentColor;
+        border-radius: 8px;
+        background: #ffffff;
+        overflow: hidden;
+      }
+
+      .entity.client {
+        color: #0d9488;
+      }
+
+      .entity.server {
+        color: #d94645;
+      }
+
+      .entity-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 58px;
+        padding: 12px 16px;
+        border-bottom: 1px solid currentColor;
+        font-size: 22px;
+        font-weight: 820;
+      }
+
+      .entity-body {
+        min-height: 142px;
+        padding: 16px;
+        display: grid;
+        align-content: start;
+        gap: 12px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 5px 12px;
+        border: 1px solid #d9dfdb;
+        border-radius: 999px;
+        background: #fbfcfb;
+        color: #5f6d69;
+        font-size: 19px;
+        line-height: 1.15;
+      }
+
+      .chip.hot {
+        color: #16201f;
+        border-color: #16201f;
+        background: #e5ebe8;
+      }
+
+      .key-stack {
+        margin-top: 18px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .key-row {
+        position: relative;
+        z-index: 2;
+        min-height: 42px;
+        padding: 10px 12px;
+        border: 1px solid #d9dfdb;
+        border-radius: 8px;
+        background: #ffffff;
+        color: #5f6d69;
+        font-size: 16px;
+      }
+
+      .wire {
+        position: relative;
+        min-height: 430px;
+        border-left: 1px dashed rgba(87, 117, 144, 0.45);
+        border-right: 1px dashed rgba(87, 117, 144, 0.45);
+      }
+
+      .wire-label {
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #5f6d69;
+        font-size: 17px;
+      }
+
+      .packet {
+        width: 310px;
+        min-height: 78px;
+        padding: 12px 14px;
+        border: 1px solid #577590;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 8px 22px rgba(22, 32, 31, 0.12);
+      }
+
+      .packet-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: #16201f;
+        font-size: 20px;
+        font-weight: 820;
+      }
+
+      .packet-title span {
+        white-space: nowrap;
+      }
+
+      .packet-meta {
+        margin-top: 8px;
+        color: #5f6d69;
+        font-size: 16px;
+        line-height: 1.35;
+      }
+
+      .packet.center {
+        margin: 118px auto 0;
+      }
+
+      .packet-row {
+        display: grid;
+        gap: 14px;
+        padding: 44px 72px;
+      }
+
+      .packet.small {
+        width: 420px;
+        min-height: 72px;
+      }
+
+      .steps-card {
+        border: 1px solid #d9dfdb;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 18px 50px rgba(31, 45, 42, 0.12);
+        padding: 18px;
+      }
+
+      .step-item {
+        display: grid;
+        grid-template-columns: 42px 1fr;
+        align-items: center;
+        gap: 14px;
+        min-height: 54px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        color: #5f6d69;
+        font-size: 24px;
+      }
+
+      .step-item.active {
+        border: 1px solid #16201f;
+        background: #e5ebe8;
+        color: #16201f;
+        font-weight: 780;
+      }
+
+      .step-number {
+        width: 34px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #e5ebe8;
+        color: #5f6d69;
+        font-size: 18px;
+        font-weight: 820;
+      }
+
+      .step-item.active .step-number {
+        background: #ffffff;
+        color: #16201f;
+      }
+
+      .proof-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 34px;
+        align-items: stretch;
+      }
+
+      .proof-card,
+      .code-card,
+      .cipher-card {
+        border: 1px solid #d9dfdb;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 18px 50px rgba(31, 45, 42, 0.12);
+      }
+
+      .proof-card {
+        position: relative;
+        padding: 34px;
+        min-height: 560px;
+        overflow: hidden;
+      }
+
+      .proof-title {
+        position: relative;
+        z-index: 2;
+        margin: 0 0 22px;
+        color: #16201f;
+        font-size: 58px;
+        line-height: 1;
+        font-weight: 870;
+      }
+
+      .proof-row {
+        position: relative;
+        z-index: 2;
+        min-height: 76px;
+        margin-top: 14px;
+        padding: 16px 18px;
+        border: 1px solid #d9dfdb;
+        border-radius: 8px;
+        color: #5f6d69;
+        font-size: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      .proof-row b {
+        color: #16201f;
+      }
+
+      .check {
+        width: 38px;
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        color: #ffffff;
+        background: #2f8f4e;
+        font-weight: 900;
+      }
+
+      .code-card {
+        min-height: 520px;
+        padding: 28px;
+        background: #101816;
+        color: #e8f2ee;
+      }
+
+      .code-line {
+        min-height: 42px;
+        color: #e8f2ee;
+        font-size: 27px;
+        line-height: 1.45;
+      }
+
+      .code-comment {
+        color: #92aaa2;
+      }
+
+      .lock-panel {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 26px;
+      }
+
+      .lock {
+        width: 164px;
+        height: 164px;
+        border: 3px solid #2f8f4e;
+        border-radius: 28px;
+        background: #ffffff;
+        color: #2f8f4e;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 78px;
+        box-shadow: 0 18px 50px rgba(31, 45, 42, 0.12);
+      }
+
+      .cipher-card {
+        min-height: 520px;
+        padding: 28px;
+      }
+
+      .cipher-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+      }
+
+      .cipher-block {
+        min-height: 74px;
+        border-radius: 8px;
+        background: #16201f;
+        color: #e8f2ee;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+      }
+
+      .tag {
+        margin-top: 28px;
+        min-height: 70px;
+        border: 1px solid #2f8f4e;
+        border-radius: 8px;
+        background: rgba(47, 143, 78, 0.08);
+        color: #2f8f4e;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: 820;
+      }
+
+      .cta-frame {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(720px, 1.1fr);
+        align-items: center;
+        gap: 58px;
+      }
+
+      .button {
+        width: max-content;
+        min-height: 70px;
+        padding: 0 28px;
+        border: 1px solid #16201f;
+        border-radius: 8px;
+        background: #16201f;
+        color: #ffffff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        font-weight: 780;
+        box-shadow: 0 14px 34px rgba(22, 32, 31, 0.2);
+      }
+
+      .accent-rail {
+        width: 100%;
+        height: 12px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: #e5ebe8;
+      }
+
+      .accent-fill {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #0d9488, #577590, #d94645);
+      }
+
+      .path-svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+
+      .draw-path {
+        stroke: #577590;
+        stroke-width: 5;
+        stroke-linecap: round;
+        fill: none;
+        opacity: 0.5;
+        stroke-dasharray: 900;
+        stroke-dashoffset: 900;
+      }
+
+      .final-packet .packet-title {
+        font-size: 18px;
+      }
+
+      .mini-label {
+        color: #5f6d69;
+        font-size: 20px;
+        line-height: 1.3;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-at0g" id="root" data-composition-id="main" data-start="0" data-duration="20" data-width="1920" data-height="1080">
+      <section data-hf-id="hf-k674" id="scene-1" class="scene">
+        <div data-hf-id="hf-3dk1" class="content two-up">
+          <div data-hf-id="hf-bdx3" class="copy">
+            <div data-hf-id="hf-uri5" class="eyebrow">TLS 1.3 Interactive Demo</div>
+            <h1 data-hf-id="hf-b0ub" class="headline">Make TLS visible.</h1>
+            <p data-hf-id="hf-vu67" class="subcopy">Watch the handshake move from packet names to verified, encrypted application data.</p>
+          </div>
+          <div data-hf-id="hf-eoq1" class="product-stage hero-stage">
+            <div data-hf-id="hf-d6sv" class="stage-topbar">
+              <div data-hf-id="hf-4iz0" class="toggle"><span data-hf-id="hf-st4q">TLS 1.3</span><span data-hf-id="hf-waqu">TLS 1.2 compare</span></div>
+              <div data-hf-id="hf-31j5" class="progress"><span data-hf-id="hf-ikog">1</span><div data-hf-id="hf-lxwj" class="progress-track"><div data-hf-id="hf-jedj" class="progress-fill hero-fill"></div></div><span data-hf-id="hf-fe88">9</span></div>
+            </div>
+            <div data-hf-id="hf-gdyh" class="lanes">
+              <div data-hf-id="hf-yeow">
+                <div data-hf-id="hf-fpx2" class="entity client">
+                  <div data-hf-id="hf-n4ws" class="entity-title"><span data-hf-id="hf-9pey">Client</span><span data-hf-id="hf-k8e3">Browser</span></div>
+                  <div data-hf-id="hf-3jbu" class="entity-body">
+                    <span data-hf-id="hf-h27r" class="chip hot">example.com</span>
+                    <span data-hf-id="hf-yx8h" class="chip">port 443</span>
+                  </div>
+                </div>
+              </div>
+              <div data-hf-id="hf-etk7" class="wire">
+                <div data-hf-id="hf-gs0t" class="wire-label mono">time flows down</div>
+                <svg data-hf-id="hf-ei39" class="path-svg" viewBox="0 0 420 430" preserveAspectRatio="none">
+                  <path data-hf-id="hf-ci59" class="draw-path hero-path" d="M 32 110 C 150 72 260 72 388 110" />
+                </svg>
+                <div data-hf-id="hf-71yq" class="packet center hero-packet">
+                  <div data-hf-id="hf-vrid" class="packet-title"><span data-hf-id="hf-215u">ClientHello</span><span data-hf-id="hf-3o6m">-&gt;</span></div>
+                  <div data-hf-id="hf-hke8" class="packet-meta mono">version, random, SNI, ALPN, key_share</div>
+                </div>
+              </div>
+              <div data-hf-id="hf-y7yw">
+                <div data-hf-id="hf-fqnu" class="entity server">
+                  <div data-hf-id="hf-azdg" class="entity-title"><span data-hf-id="hf-8a86">Server</span><span data-hf-id="hf-vz7e">Site</span></div>
+                  <div data-hf-id="hf-7dfi" class="entity-body">
+                    <span data-hf-id="hf-bn8c" class="chip hot">listen 443</span>
+                    <span data-hf-id="hf-e9vk" class="chip">choose cert</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-v1or" id="scene-2" class="scene">
+        <div data-hf-id="hf-nzp1" class="content two-up">
+          <div data-hf-id="hf-r8s7" class="copy">
+            <div data-hf-id="hf-6umu" class="eyebrow">From steps to state</div>
+            <h2 data-hf-id="hf-mfth" class="headline">A live map of every handshake.</h2>
+            <p data-hf-id="hf-80qg" class="subcopy">Client, server, packet, key: every moving part gets a place on the screen.</p>
+          </div>
+          <div data-hf-id="hf-hj6o" class="steps-card">
+            <div data-hf-id="hf-10hw" class="step-item active"><span data-hf-id="hf-95ae" class="step-number">1</span><span data-hf-id="hf-7uys">TCP connection</span></div>
+            <div data-hf-id="hf-fjkq" class="step-item"><span data-hf-id="hf-9jlf" class="step-number">2</span><span data-hf-id="hf-6gcm">ClientHello</span></div>
+            <div data-hf-id="hf-glj2" class="step-item"><span data-hf-id="hf-9xwg" class="step-number">3</span><span data-hf-id="hf-am1i">ServerHello</span></div>
+            <div data-hf-id="hf-gzu3" class="step-item"><span data-hf-id="hf-75r9" class="step-number">4</span><span data-hf-id="hf-ohip">EncryptedExtensions</span></div>
+            <div data-hf-id="hf-he54" class="step-item"><span data-hf-id="hf-7k2a" class="step-number">5</span><span data-hf-id="hf-9k7g">Certificate</span></div>
+            <div data-hf-id="hf-elzx" class="step-item"><span data-hf-id="hf-7ydb" class="step-number">6</span><span data-hf-id="hf-a3j5">CertificateVerify</span></div>
+            <div data-hf-id="hf-f0ay" class="step-item"><span data-hf-id="hf-8coc" class="step-number">7</span><span data-hf-id="hf-sgb3">Finished check</span></div>
+            <div data-hf-id="hf-felz" class="step-item"><span data-hf-id="hf-5kj5" class="step-number">8</span><span data-hf-id="hf-7ia0">Application secrets</span></div>
+            <div data-hf-id="hf-fsx0" class="step-item"><span data-hf-id="hf-5yu6" class="step-number">9</span><span data-hf-id="hf-lf33">Encrypted HTTP data</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-r3kq" id="scene-3" class="scene">
+        <div data-hf-id="hf-mcm7" class="content">
+          <div data-hf-id="hf-x11t">
+            <div data-hf-id="hf-fjrz" class="eyebrow">Trust, shown as mechanism</div>
+            <h2 data-hf-id="hf-41gv" class="headline">Proof you can follow.</h2>
+          </div>
+          <div data-hf-id="hf-766f" class="proof-grid">
+            <div data-hf-id="hf-exs9" class="proof-card">
+              <h3 data-hf-id="hf-q3m8" class="proof-title">Certificate proof</h3>
+              <div data-hf-id="hf-culx" class="proof-row"><b data-hf-id="hf-n7b2">ClientHello</b><span data-hf-id="hf-btad" class="mono">key_share: X25519 pub C</span><span data-hf-id="hf-iy3q" class="check">1</span></div>
+              <div data-hf-id="hf-u2i1" class="proof-row"><b data-hf-id="hf-xb3k">Certificate</b><span data-hf-id="hf-uyt8" class="mono">example.com chain</span><span data-hf-id="hf-jcer" class="check">2</span></div>
+              <div data-hf-id="hf-v9f4" class="proof-row"><b data-hf-id="hf-kma5">CertificateVerify</b><span data-hf-id="hf-vsgm" class="mono">signature over transcript</span><span data-hf-id="hf-jqps" class="check">3</span></div>
+              <div data-hf-id="hf-uv43" class="proof-row"><b data-hf-id="hf-5odf">Finished</b><span data-hf-id="hf-xw0f" class="mono">MAC(handshake transcript)</span><span data-hf-id="hf-gykl" class="check">4</span></div>
+            </div>
+            <div data-hf-id="hf-ngjh" class="proof-card">
+              <h3 data-hf-id="hf-bp9b" class="proof-title">Shared secrets</h3>
+              <div data-hf-id="hf-z1ya" class="key-row mono">client_random: c7a1...91fd</div>
+              <div data-hf-id="hf-711h" class="key-row mono">server key_share: X25519 pub S</div>
+              <div data-hf-id="hf-1sjl" class="key-row mono">handshake_secret: HKDF(shared_secret)</div>
+              <div data-hf-id="hf-pc6v" class="key-row mono">client_traffic_secret: HKDF(...)</div>
+              <div data-hf-id="hf-qwbf" class="key-row mono">server_traffic_secret: HKDF(...)</div>
+              <svg data-hf-id="hf-avxz" class="path-svg" viewBox="0 0 820 560" preserveAspectRatio="none">
+                <path data-hf-id="hf-8aru" class="draw-path proof-path" d="M 80 122 C 230 170 340 210 420 278 S 650 390 742 450" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-8bv1" id="scene-4" class="scene">
+        <div data-hf-id="hf-i7rz" class="content">
+          <div data-hf-id="hf-xfcu">
+            <div data-hf-id="hf-m0n7" class="eyebrow">The payoff</div>
+            <h2 data-hf-id="hf-f0q5" class="headline">Plain HTTP becomes protected data.</h2>
+          </div>
+          <div data-hf-id="hf-s753" class="proof-grid">
+            <div data-hf-id="hf-tjq2" class="code-card">
+              <div data-hf-id="hf-7y9s" class="code-line mono code-comment">// before TLS application data</div>
+              <div data-hf-id="hf-6qt1" class="code-line mono">GET / HTTP/2</div>
+              <div data-hf-id="hf-i4jc" class="code-line mono">Host: example.com</div>
+              <div data-hf-id="hf-tuxe" class="code-line mono">Cookie: session=...</div>
+              <div data-hf-id="hf-u842" class="code-line mono code-comment">// readable only before encryption</div>
+            </div>
+            <div data-hf-id="hf-u6p0" class="cipher-card">
+              <div data-hf-id="hf-wyek" class="lock-panel">
+                <div data-hf-id="hf-2aqa" class="lock">TLS</div>
+                <div data-hf-id="hf-ab0b" class="mini-label mono">AEAD encrypt + authenticate</div>
+              </div>
+              <div data-hf-id="hf-ezkq" class="cipher-grid">
+                <div data-hf-id="hf-hmr9" class="cipher-block mono">8f 21</div>
+                <div data-hf-id="hf-fb1x" class="cipher-block mono">c0 aa</div>
+                <div data-hf-id="hf-vzxk" class="cipher-block mono">44 e9</div>
+                <div data-hf-id="hf-ulg8" class="cipher-block mono">10 7b</div>
+                <div data-hf-id="hf-z5bm" class="cipher-block mono">a1 6d</div>
+                <div data-hf-id="hf-7dzd" class="cipher-block mono">32 ff</div>
+                <div data-hf-id="hf-u6eo" class="cipher-block mono">90 03</div>
+                <div data-hf-id="hf-6sg0" class="cipher-block mono">bd 71</div>
+              </div>
+              <div data-hf-id="hf-1ipd" class="tag mono">auth tag verified</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section data-hf-id="hf-7k78" id="scene-5" class="scene">
+        <div data-hf-id="hf-fy29" class="content cta-frame">
+          <div data-hf-id="hf-quh6" class="copy">
+            <div data-hf-id="hf-istt" class="eyebrow">TLS 1.3, step by step</div>
+            <h2 data-hf-id="hf-ani6" class="headline">Teach TLS without hand waving.</h2>
+            <div data-hf-id="hf-8ppu" class="button">Open the interactive demo</div>
+          </div>
+          <div data-hf-id="hf-crt4" class="product-stage">
+            <div data-hf-id="hf-qc3z" class="stage-topbar">
+              <div data-hf-id="hf-i8tg" class="toggle"><span data-hf-id="hf-wdum">TLS 1.3</span><span data-hf-id="hf-f3l6">TLS 1.2 compare</span></div>
+              <div data-hf-id="hf-jw5x" class="progress"><span data-hf-id="hf-cy6g">1</span><div data-hf-id="hf-drz7" class="progress-track"><div data-hf-id="hf-viyh" class="progress-fill final-fill"></div></div><span data-hf-id="hf-nfb4">9</span></div>
+            </div>
+            <div data-hf-id="hf-zpgd" class="lanes">
+              <div data-hf-id="hf-w8fr">
+                <div data-hf-id="hf-tsnu" class="entity client">
+                  <div data-hf-id="hf-9sgd" class="entity-title"><span data-hf-id="hf-gf5a">Client</span><span data-hf-id="hf-h8aj">Browser</span></div>
+                  <div data-hf-id="hf-7rqj" class="entity-body">
+                    <span data-hf-id="hf-pmy7" class="chip hot">plain request</span>
+                    <span data-hf-id="hf-7ih9" class="chip">client_app_secret</span>
+                  </div>
+                </div>
+                <div data-hf-id="hf-imq2" class="key-stack">
+                  <div data-hf-id="hf-gfmf" class="key-row mono">ClientHello -&gt;</div>
+                  <div data-hf-id="hf-vbb4" class="key-row mono">Finished -&gt;</div>
+                </div>
+              </div>
+              <div data-hf-id="hf-630n" class="wire">
+                <div data-hf-id="hf-qdin" class="wire-label mono">application data protected</div>
+                <div data-hf-id="hf-5sec" class="packet center final-packet">
+                  <div data-hf-id="hf-gh95" class="packet-title"><span data-hf-id="hf-shzj">Encrypted Application Data</span><span data-hf-id="hf-19o2">-&gt;</span></div>
+                  <div data-hf-id="hf-2e12" class="packet-meta mono">GET / + response, protected by AEAD</div>
+                </div>
+                <div data-hf-id="hf-24d3" class="accent-rail"><div data-hf-id="hf-qynl" class="accent-fill final-rail"></div></div>
+              </div>
+              <div data-hf-id="hf-wmqs">
+                <div data-hf-id="hf-vxpa" class="entity server">
+                  <div data-hf-id="hf-a6re" class="entity-title"><span data-hf-id="hf-s6oa">Server</span><span data-hf-id="hf-z5b2">Site</span></div>
+                  <div data-hf-id="hf-861k" class="entity-body">
+                    <span data-hf-id="hf-1zoa" class="chip hot">decrypt request</span>
+                    <span data-hf-id="hf-079t" class="chip">server_app_secret</span>
+                  </div>
+                </div>
+                <div data-hf-id="hf-8gge" class="key-stack">
+                  <div data-hf-id="hf-vxo9" class="key-row mono">&lt;- ServerHello</div>
+                  <div data-hf-id="hf-wn87" class="key-row mono">&lt;- Certificate</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      var tl = gsap.timeline({ paused: true });
+      tl.set("#scene-2, #scene-3, #scene-4, #scene-5", { opacity: 0, visibility: "hidden" }, 0);
+
+      function enter(selector, fromVars, toVars, at) {
+        tl.fromTo(selector, fromVars, toVars, at);
+      }
+
+      function transition(fromScene, toScene, at) {
+        tl.set(toScene, { opacity: 1, visibility: "visible", filter: "blur(12px)" }, at);
+        tl.fromTo(toScene + " .content", { y: 36, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, ease: "power3.out" }, at + 0.03);
+        tl.to(fromScene, { opacity: 0, filter: "blur(10px)", duration: 0.28, ease: "power2.inOut" }, at);
+        tl.to(toScene, { filter: "blur(0px)", duration: 0.3, ease: "sine.out" }, at + 0.1);
+        tl.set(fromScene, { visibility: "hidden" }, at + 0.3);
+      }
+
+      enter("#scene-1 .eyebrow", { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.44, ease: "power3.out" }, 0.18);
+      enter("#scene-1 .headline", { x: -70, opacity: 0 }, { x: 0, opacity: 1, duration: 0.72, ease: "expo.out" }, 0.32);
+      enter("#scene-1 .subcopy", { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 0.68);
+      enter("#scene-1 .hero-stage", { x: 90, opacity: 0, scale: 0.96 }, { x: 0, opacity: 1, scale: 1, duration: 0.72, ease: "back.out(1.2)" }, 0.44);
+      tl.to("#scene-1 .hero-path", { strokeDashoffset: 0, duration: 1.1, ease: "power2.out" }, 1.05);
+      enter("#scene-1 .hero-packet", { x: -160, opacity: 0, scale: 0.92 }, { x: 0, opacity: 1, scale: 1, duration: 0.74, ease: "power4.out" }, 1.14);
+      tl.fromTo("#scene-1 .hero-fill", { width: "6%" }, { width: "34%", duration: 2.2, ease: "sine.inOut" }, 0.8);
+
+      transition("#scene-1", "#scene-2", 3.0);
+      enter("#scene-2 .eyebrow", { y: -24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.38, ease: "power2.out" }, 3.72);
+      enter("#scene-2 .headline", { x: -80, opacity: 0 }, { x: 0, opacity: 1, duration: 0.64, ease: "expo.out" }, 3.86);
+      enter("#scene-2 .subcopy", { y: 36, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, ease: "power3.out" }, 4.18);
+      enter("#scene-2 .steps-card", { x: 90, opacity: 0, scale: 0.96 }, { x: 0, opacity: 1, scale: 1, duration: 0.58, ease: "back.out(1.1)" }, 3.82);
+      enter("#scene-2 .step-item", { x: 60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.38, ease: "power2.out", stagger: 0.08 }, 4.22);
+      tl.to("#scene-2 .step-item.active", { backgroundColor: "#0d9488", duration: 0.28, yoyo: true, repeat: 3, ease: "sine.inOut" }, 5.28);
+
+      transition("#scene-2", "#scene-3", 7.28);
+      enter("#scene-3 .eyebrow", { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, ease: "power3.out" }, 7.72);
+      enter("#scene-3 .headline", { x: -80, opacity: 0 }, { x: 0, opacity: 1, duration: 0.64, ease: "expo.out" }, 7.88);
+      enter("#scene-3 .proof-card", { y: 90, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.68, ease: "back.out(1.0)", stagger: 0.14 }, 8.2);
+      enter("#scene-3 .proof-row", { x: -42, opacity: 0 }, { x: 0, opacity: 1, duration: 0.34, ease: "power2.out", stagger: 0.12 }, 8.74);
+      enter("#scene-3 .key-row", { x: 48, opacity: 0 }, { x: 0, opacity: 1, duration: 0.34, ease: "power3.out", stagger: 0.1 }, 8.84);
+      tl.to("#scene-3 .proof-path", { strokeDashoffset: 0, duration: 1.25, ease: "power2.out" }, 9.55);
+      enter("#scene-3 .check", { scale: 0.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.28, ease: "back.out(2)", stagger: 0.18 }, 9.16);
+
+      transition("#scene-3", "#scene-4", 11.48);
+      enter("#scene-4 .eyebrow", { y: -28, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power2.out" }, 11.92);
+      enter("#scene-4 .headline", { x: -72, opacity: 0 }, { x: 0, opacity: 1, duration: 0.62, ease: "expo.out" }, 12.06);
+      enter("#scene-4 .code-card", { x: -90, opacity: 0, scale: 0.97 }, { x: 0, opacity: 1, scale: 1, duration: 0.58, ease: "back.out(1.1)" }, 12.46);
+      enter("#scene-4 .code-line", { x: -34, opacity: 0 }, { x: 0, opacity: 1, duration: 0.26, ease: "power2.out", stagger: 0.12 }, 12.96);
+      enter("#scene-4 .lock", { scale: 0.55, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(1.8)" }, 13.34);
+      enter("#scene-4 .mini-label", { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 0.34, ease: "power3.out" }, 13.5);
+      enter("#scene-4 .cipher-card", { x: 90, opacity: 0, scale: 0.97 }, { x: 0, opacity: 1, scale: 1, duration: 0.58, ease: "back.out(1.1)" }, 13.28);
+      enter("#scene-4 .cipher-block", { y: 34, opacity: 0, scale: 0.82 }, { y: 0, opacity: 1, scale: 1, duration: 0.26, ease: "power4.out", stagger: 0.055 }, 13.76);
+      enter("#scene-4 .tag", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.38, ease: "power2.out" }, 14.42);
+      tl.to("#scene-4 .lock", { boxShadow: "0 0 0 12px rgba(47, 143, 78, 0.10)", duration: 0.36, yoyo: true, repeat: 3, ease: "sine.inOut" }, 13.9);
+
+      transition("#scene-4", "#scene-5", 15.68);
+      enter("#scene-5 .eyebrow", { y: 28, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, ease: "power3.out" }, 16.14);
+      enter("#scene-5 .headline", { x: -80, opacity: 0 }, { x: 0, opacity: 1, duration: 0.7, ease: "expo.out" }, 16.28);
+      enter("#scene-5 .button", { y: 36, opacity: 0, scale: 0.94 }, { y: 0, opacity: 1, scale: 1, duration: 0.48, ease: "back.out(1.4)" }, 16.94);
+      enter("#scene-5 .product-stage", { x: 92, opacity: 0, scale: 0.96 }, { x: 0, opacity: 1, scale: 1, duration: 0.7, ease: "back.out(1.1)" }, 16.34);
+      enter("#scene-5 .final-packet", { x: -120, opacity: 0 }, { x: 0, opacity: 1, duration: 0.62, ease: "power4.out" }, 17.16);
+      tl.fromTo("#scene-5 .final-fill", { width: "12%" }, { width: "100%", duration: 2.1, ease: "sine.inOut" }, 16.8);
+      tl.fromTo("#scene-5 .final-rail", { width: "0%" }, { width: "100%", duration: 1.4, ease: "power2.out" }, 17.4);
+      tl.to("#scene-5 .product-stage", { y: -8, duration: 1.4, yoyo: true, repeat: 1, ease: "sine.inOut" }, 17.9);
+      tl.to("#scene-5", { opacity: 0.92, duration: 0.45, ease: "sine.inOut" }, 19.55);
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
