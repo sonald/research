@@ -1,6 +1,59 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, step, cells, ghostCells, encodeState } from './engine.js';
+import { ACTIONS, ALL_ACTIONS, applyPoseInput, createGame, step, cells, ghostCells, encodeState, legalActions } from './engine.js';
+
+test('multi-column input moves only horizontally and consumes one normal beat', () => {
+  for (const [action, x] of [['left_2', 1], ['right_2', 5]]) {
+    const game = createGame();
+    game.active = {type:'L', x:3, y:4, rotation:0};
+    step(game, action);
+    assert.equal(game.active.x, x); assert.equal(game.active.y, 4);
+    assert.equal(game.tick, 1); assert.equal(game.gravityBeat, 1); assert.equal(game.pieces, 0);
+    game.gravityBeat = 4;
+    step(game, action === 'left_2' ? 'right_2' : 'left_2');
+    assert.equal(game.active.x, 3); assert.equal(game.active.y, 5);
+    assert.equal(game.tick, 2); assert.equal(game.gravityBeat, 0);
+  }
+  assert.equal(Object.keys(ACTIONS).length, 12);
+  assert.equal(Object.keys(ALL_ACTIONS).length, 28);
+  assert.equal(legalActions(createGame()).left_2, undefined);
+});
+
+test('multi-column input checks intermediate cells and rolls back the whole shift', () => {
+  const game = createGame();
+  game.active = {type:'I', x:-2, y:4, rotation:1};
+  game.board[5][1] = 'Z'; // Destination column 2 is clear, but the path crosses column 1.
+  const before = structuredClone(game);
+  assert.equal(applyPoseInput(game, 'right_2'), false);
+  assert.deepEqual(game, before);
+  step(game, 'right_2');
+  assert.deepEqual(game.active, before.active); assert.equal(game.tick, 1);
+  game.board[5][1] = '.';
+  game.active.x = 6; // column 8; first shift fits, second would cross the wall.
+  const pose = {...game.active};
+  assert.equal(applyPoseInput(game, 'right_2'), false);
+  assert.deepEqual(game.active, pose);
+  assert.throws(() => step(game, 'right_10'), /Unknown action/);
+});
+
+test('pose previews reuse SRS while leaving timing and other game state untouched', () => {
+  const game = createGame();
+  game.active = {type:'I', x:-2, y:5, rotation:1};
+  game.gravityBeat = 4; game.groundedBeats = 1; game.lockResets = 3;
+  const before = structuredClone(game);
+  assert.equal(applyPoseInput(game, 'rotate_ccw'), true);
+  assert.deepEqual(game.active, {type:'I', x:0, y:5, rotation:0});
+  assert.deepEqual({...game, active: before.active}, before);
+  const after = structuredClone(game);
+  assert.equal(applyPoseInput(game, 'hard_drop'), false);
+  assert.deepEqual(game, after);
+  for (const flag of ['paused', 'over']) {
+    const stopped = {...structuredClone(game), [flag]: true};
+    const snapshot = structuredClone(stopped);
+    assert.equal(applyPoseInput(stopped, 'right_2'), false);
+    assert.deepEqual(stopped, snapshot);
+  }
+});
 
 test('same seed and actions reproduce board, bag, timing and score; bags contain all seven pieces', () => {
   const a = createGame('repeat'), b = createGame('repeat');
@@ -17,9 +70,30 @@ test('hard drop clears a row, counts points, spawns without gravity', () => {
   g.active = { type:'I', x:3, y:0, rotation:0 };
   g.gravityBeat = 4;
   step(g, 'hard_drop');
-  assert.equal(g.lines,1); assert.equal(g.pieces,1); assert.equal(g.score,136);
+  assert.equal(g.lines,1); assert.equal(g.pieces,1); assert.equal(g.score,100);
   assert.ok(g.board.flat().every(c => c === '.'));
   assert.equal(g.active.y,0); assert.equal(g.gravityBeat,0);
+});
+
+test('only clearing rows earns points, independent of drop distance and lock method', () => {
+  for (const action of ['soft_drop', 'hard_drop', 'left', 'right', 'rotate_cw', 'rotate_ccw', 'rotate_180', 'hold', 'wait']) {
+    const game = createGame();
+    step(game, action);
+    assert.equal(game.score, 0, action);
+  }
+  const falling = createGame();
+  for (let i = 0; i < 110; i++) step(falling, 'wait');
+  assert.ok(falling.pieces > 0);
+  assert.equal(falling.score, 0);
+  for (const count of [1, 2, 3, 4]) for (const y of [0, 15, 16]) for (const action of ['hard_drop', 'soft_drop', 'wait']) {
+    const game = createGame();
+    game.active = {type:'I', x:2, y, rotation:1};
+    for (let row = 20 - count; row < 20; row++) game.board[row] = [...'JJJJ.JJJJJ'];
+    for (let i = 0; i < 110 && game.pieces === 0; i++) step(game, action);
+    assert.equal(game.pieces, 1);
+    assert.equal(game.lines, count);
+    assert.equal(game.score, [0, 100, 300, 500, 800][count], `${count} rows, y=${y}, ${action}`);
+  }
 });
 
 test('hold is available once per piece and restored by lock; held piece resets rotation', () => {
@@ -79,25 +153,30 @@ test('saved real Jev run replays gameplay facts despite state wording changes', 
   const { readFile } = await import('node:fs/promises');
   const { records } = JSON.parse(await readFile(new URL('./live-run.json', import.meta.url), 'utf8'));
   const game = createGame('42');
-  // Historical records remain untouched; compare every dynamic fact, not prompt wording.
+  // Historical records used drop bonuses; preserve them and compare all other gameplay facts.
   const facts = text => ({
     board: text.match(/^\d{2}  [A-Za-z.]{10}$/gm),
     active: JSON.parse(text.match(/Active: (\{[^\n]+?\});/)[1]),
     activeCells: JSON.parse(text.match(/active_cells=(\[[^\n;]*\])/)[1]),
     landing: JSON.parse(text.match(/landing_cells=(\[[^\n;]*\])/)[1]),
     next: text.match(/^Next .*$/m)[0],
-    counters: ['score', 'lines', 'locked_pieces', 'tick', 'paused', 'game_over', 'seed'].map(key =>
+    counters: ['lines', 'locked_pieces', 'tick', 'paused', 'game_over', 'seed'].map(key =>
       text.match(new RegExp('(?:^|[ ;])' + (key === 'lines' ? '(?:cleared_)?lines' : key) + '=([^;\\n]+)', 'm'))[1]),
     timing: text.match(/^Timing:.*$/m)[0],
     history: text.match(/^Recent actions.*$/m)[0],
   });
   assert.equal(records.length, 9);
+  let expectedScore = 0;
   for (const entry of records) {
     assert.deepEqual(facts(entry.state), facts(encodeState(game)));
     assert.equal(entry.action, entry.answer.choice);
+    const previousLines = game.lines;
     step(game, entry.action);
+    expectedScore += [0, 100, 300, 500, 800][game.lines - previousLines];
+    assert.equal(game.score, expectedScore);
     assert.deepEqual(facts(entry.result), facts(encodeState(game)));
   }
   assert.equal(game.pieces, 9);
   assert.equal(game.lines, 0);
+  assert.equal(game.score, 0);
 });

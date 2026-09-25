@@ -1,13 +1,19 @@
 export const ACTIONS = Object.freeze({
   left: 'Move one column left', right: 'Move one column right',
-  soft_drop: 'Move down one row (1 point if successful)',
-  hard_drop: 'Drop to the landing position and lock immediately (2 points per row)',
+  soft_drop: 'Move down one row; earns no drop points',
+  hard_drop: 'Drop to the landing position and lock immediately; earns points only if rows clear',
   rotate_cw: 'Rotate 90 degrees clockwise using SRS wall kicks',
   rotate_ccw: 'Rotate 90 degrees counterclockwise using SRS wall kicks',
   rotate_180: 'Attempt two consecutive clockwise SRS rotations in one beat',
   hold: 'Swap with hold, once per active piece; empty hold draws from queue',
   wait: 'Take no input for one beat', pause: 'Pause the game without advancing time',
   resume: 'Resume the game without advancing time', restart: 'Restart the same seed without advancing time',
+});
+
+export const ALL_ACTIONS = Object.freeze({
+  ...ACTIONS,
+  ...Object.fromEntries(['left', 'right'].flatMap(direction => Array.from({length: 8}, (_, i) =>
+    [`${direction}_${i + 2}`, `Move ${i + 2} columns ${direction} at the current row, only if the entire path is clear; takes one beat`]))),
 });
 
 const SHAPES = {
@@ -95,6 +101,24 @@ function rotate(game, delta) {
   }
   return false;
 }
+// Pose-only input for same-row placement previews. No gravity, timers, or locking.
+export function applyPoseInput(game, action) {
+  if (game.paused || game.over || !game.active) return false;
+  const shift = /^(left|right)(?:_([2-9]))?$/.exec(action);
+  if (shift) {
+    const original = game.active;
+    for (let i = 0; i < Number(shift[2] ?? 1); i++) {
+      if (!move(game, shift[1] === 'left' ? -1 : 1, 0)) { game.active = original; return false; }
+    }
+    return true;
+  }
+  if (action === 'rotate_cw' || action === 'rotate_ccw') return rotate(game, action === 'rotate_cw' ? 1 : -1);
+  if (action === 'rotate_180') {
+    const first = rotate(game, 1);
+    return rotate(game, 1) || first;
+  }
+  return false;
+}
 function lock(game) {
   if (cells(game).some(({y}) => y < 0)) { game.over = true; return; }
   for (const {x,y,type} of cells(game)) game.board[y][x] = type;
@@ -110,8 +134,21 @@ export function ghostCells(game) {
   while (fits(game, {...ghost, y: ghost.y + 1})) ghost.y++;
   return pieceCells(ghost);
 }
+export function boardMetrics(board) {
+  const columnHeights = Array.from({length: 10}, (_, x) => {
+    const top = board.findIndex(row => row[x] !== '.');
+    return top < 0 ? 0 : 20 - top;
+  });
+  return {
+    definitions: 'Locked blocks only. Column height = 20 minus top occupied y (empty column = 0). Holes = empty cells below an occupied cell in the same column. Bumpiness = sum of absolute adjacent column-height differences.',
+    columnHeights,
+    maxHeight: Math.max(...columnHeights),
+    holes: columnHeights.reduce((sum, height, x) => sum + board.slice(20 - height).filter(row => row[x] === '.').length, 0),
+    bumpiness: columnHeights.slice(1).reduce((sum, height, i) => sum + Math.abs(height - columnHeights[i]), 0),
+  };
+}
 export function step(game, action) {
-  if (!Object.hasOwn(ACTIONS, action)) throw new Error(`Unknown action: ${action}`);
+  if (!Object.hasOwn(ALL_ACTIONS, action)) throw new Error(`Unknown action: ${action}`);
   if (action === 'restart') { Object.assign(game, createGame(game.seed)); return game; }
   if (action === 'pause') { game.paused = true; return game; }
   if (action === 'resume') { game.paused = false; return game; }
@@ -119,13 +156,10 @@ export function step(game, action) {
   game.tick++;
   game.history.push(action); game.history = game.history.slice(-8);
   const wasGrounded = !fits(game, {...game.active, y: game.active.y + 1});
-  let reset = false;
-  if (action === 'left' || action === 'right') reset = move(game, action === 'left' ? -1 : 1, 0);
-  if (action === 'rotate_cw' || action === 'rotate_ccw') reset = rotate(game, action === 'rotate_cw' ? 1 : -1);
-  if (action === 'rotate_180') { reset = rotate(game, 1); reset = rotate(game, 1) || reset; }
-  if (action === 'soft_drop' && move(game, 0, 1)) game.score++;
+  const reset = applyPoseInput(game, action);
+  if (action === 'soft_drop') move(game, 0, 1);
   if (action === 'hard_drop') {
-    while (move(game, 0, 1)) game.score += 2;
+    while (move(game, 0, 1)) {}
     lock(game); return game;
   }
   if (action === 'hold' && game.canHold) {
@@ -159,9 +193,10 @@ export function stateSections(game) {
     status: `tick=${game.tick}; paused=${game.paused}; game_over=${game.over}; seed=${JSON.stringify(game.seed)}`,
     timing: `Timing: gravity_beat=${game.gravityBeat}/5; grounded_beats=${game.groundedBeats}/2; lock_resets=${game.lockResets}/15.`,
     rules: ['Rules: Each gameplay action takes one beat, including blocked moves and unavailable hold. After input gravity moves down one row on every fifth beat. Grounded means down is blocked; lock occurs after two grounded beats. Successful grounded lateral moves or rotations reset the lock timer up to 15 times; the current beat then counts as grounded beat 1 if still grounded. Airborne resets grounded count.',
+    'Multi-column shifts (left_2..left_9/right_2..right_9) check every intermediate cell at the current row; a blocked path cancels the entire shift. A shift consumes one beat regardless of distance.',
     'Hard drop locks immediately; successful hold spawns immediately; both reset piece timers and do not apply gravity to the new piece. Pause/resume/restart use no beat. While paused or over only these control actions work. Restart resets the same seed and loses the current run.',
     '7-bag pieces; five previews. Spawn origin=(3,0), rotation=0. SRS 90-degree rotations; 180 is two independent clockwise attempts (a partial 90-degree rotation can result). O rotation is a no-op. Collision above the board is allowed to y=-4; locking any cell above the board or blocked spawn ends the game.',
-    'Full rows clear simultaneously. Line-clear score: 1=100, 2=300, 3=500, 4=800; soft drop +1/row; hard drop +2/row. Fixed gravity; no combo or T-spin bonuses.'].join('\n'),
+    'Full rows clear simultaneously. Only cleared rows earn points: 1=100, 2=300, 3=500, 4=800. Soft drop and hard drop earn no movement points. Fixed gravity; no combo or T-spin bonuses.'].join('\n'),
     shapes: 'Spawn matrices (rows separated by /; rotate clockwise around matrix center): ' + Object.entries(SHAPES).map(([type, rows]) => `${type}=${rows.join('/')}`).join(' '),
     history: `Recent actions (oldest first): ${game.history.join(',') || 'none'}`,
     actions: 'Available actions: ' + Object.entries(ACTIONS).map(([id, description]) => `${id}: ${description}`).join('; '),
@@ -178,13 +213,8 @@ export function legalActions(game) {
   if (game.paused) return { resume: ACTIONS.resume, restart: ACTIONS.restart };
   return Object.fromEntries(Object.entries(ACTIONS).filter(([action]) => {
     const probe = { ...game, active: { ...game.active } };
-    if (action === 'left' || action === 'right') return move(probe, action === 'left' ? -1 : 1, 0);
+    if (action === 'left' || action === 'right' || action.startsWith('rotate_')) return applyPoseInput(probe, action);
     if (action === 'soft_drop') return move(probe, 0, 1);
-    if (action === 'rotate_cw' || action === 'rotate_ccw') return rotate(probe, action === 'rotate_cw' ? 1 : -1);
-    if (action === 'rotate_180') {
-      const first = rotate(probe, 1);
-      return rotate(probe, 1) || first;
-    }
     if (action === 'hold') return game.canHold;
     return action !== 'resume';
   }));

@@ -3,11 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { TypeSafeClient, choice } from '@typesafe-ai/sdk';
-import { ACTIONS } from './engine.js';
+import { ALL_ACTIONS as ACTIONS } from './engine.js';
 import { DEFAULT_CONFIG, buildDecision, validateGame } from './experiment.js';
 
-export const DEFAULT_QUESTION = 'What action should the player take next to maximize cleared lines and survive in this Tetris game? Choose exactly one available control. Pausing or restarting abandons progress; use only when appropriate.';
-const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/engine.js': ['engine.js', 'text/javascript'], '/experiment.js': ['experiment.js', 'text/javascript'] };
+export const DEFAULT_QUESTION = 'Which single action should the player take next to clear rows and survive? Only cleared rows earn points. Prefer fewer holes, a low stack and a flat surface. Each Choice key is the action to execute now. If provided, immediate_gain is its actual change; expected_gain is the total gain after the additional followup actions, selected as the best available preview. An empty followup means no additional action is needed. Forecasts are conditional, not guaranteed, and followup actions are NOT automatically executed; a forecast hard_drop remains hypothetical if excluded from actual choices. Avoid pausing or restarting an active game.';
+const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/engine.js': ['engine.js', 'text/javascript'], '/experiment.js': ['experiment.js', 'text/javascript'], '/row-choices.js': ['row-choices.js','text/javascript'] };
 
 export function createServer({ apiKey = process.env.TYPESAFE_API_KEY, model = process.env.TYPESAFE_DEFAULT_MODEL || 'jev-latest', client, maxRequests = 120 } = {}) {
   let inFlight = false;
@@ -75,7 +75,7 @@ export function createServer({ apiKey = process.env.TYPESAFE_API_KEY, model = pr
       catch { fail(400, 'Invalid game snapshot or experiment configuration.'); return; }
       const { state, actions } = decision;
       if (!Object.keys(actions).length) { fail(422, 'No candidate actions remain. Enable at least one action available in this state.'); return; }
-      if ((typeof state === 'string' ? state : JSON.stringify(state)).length > 24_000) { fail(400, 'Encoded state is too large.'); return; }
+      if ((typeof state === 'string' ? state : JSON.stringify(state)).length > 48_000) { fail(400, 'Encoded state is too large.'); return; }
       requests++;
       const started = performance.now();
       const response = await sdk.systemOne({ state, questions: { next_action: choice(question, actions) }, model: requestedModel });

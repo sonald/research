@@ -1,8 +1,9 @@
-import { ACTIONS, createGame, step, cells, ghostCells } from './engine.js';
+import { ALL_ACTIONS as ACTIONS, createGame, step, cells, ghostCells } from './engine.js';
 import { DEFAULT_CONFIG, STATE_SECTION_LABELS, normalizeConfig, buildDecision } from './experiment.js';
 
 const $ = id => document.getElementById(id);
 const labels = {left:'左移',right:'右移',soft_drop:'软降',hard_drop:'硬降',rotate_cw:'顺时针',rotate_ccw:'逆时针',rotate_180:'旋转 180°',hold:'暂存 / 交换',wait:'等待',pause:'暂停',resume:'继续',restart:'重新开始'};
+for(const direction of ['left','right'])for(let n=2;n<=9;n++)labels[`${direction}_${n}`]=`${direction==='left'?'左':'右'}移 ${n} 格`;
 const shortcuts = {ArrowLeft:'left',a:'left',ArrowRight:'right',d:'right',ArrowDown:'soft_drop',s:'soft_drop',ArrowUp:'rotate_cw',w:'rotate_cw',x:'rotate_cw',z:'rotate_ccw',q:'rotate_180',' ':'hard_drop',c:'hold','.':'wait',r:'restart'};
 const controls = [['left','←'],['right','→'],['soft_drop','↓'],['hard_drop','Space'],['rotate_cw','↑ / X'],['rotate_ccw','Z'],['rotate_180','Q'],['hold','C'],['wait','.']];
 let game = createGame('42'), revision = 0, mode = 'manual', busy = false, running = false, runToken = 0;
@@ -12,6 +13,7 @@ try { const saved=localStorage.getItem('jev-tetris-experiment'); if(saved)experi
 $('state-format').value=experiment.format;
 $('action-filter').value=experiment.legalOnly?'legal':'all';
 $('choice-mode').value=experiment.choiceMode;
+$('lookahead-depth').value=String(experiment.lookaheadDepth);
 $('include-metrics').checked=experiment.includeMetrics;
 for(const [action,label] of Object.entries(labels)) {
   const row=document.createElement('label');row.className='experiment-check';
@@ -46,6 +48,9 @@ function preview(type) {
 }
 function status(text,notice) { $('status').textContent=text;if(notice!==undefined)$('notice').textContent=notice; }
 function updateButtons() {
+  $('lookahead-depth').disabled=experiment.choiceMode!=='outcome';
+  $('action-filter').disabled=experiment.choiceMode==='row_placements';
+  $('row-mode-note').hidden=experiment.choiceMode!=='row_placements';
   const noCandidates=!Object.keys(currentDecision().actions).length;
   $('ask').disabled=busy||!configured||noCandidates;
   $('ask').querySelector('small').textContent=$('observe-only').checked?'仅询问，保留当前棋盘':'让模型选择并执行下一个动作';
@@ -72,7 +77,7 @@ function render() {
   $('budget').textContent=`${decisions} 次 Jev 决策`;updateButtons();
 }
 function record(item) {
-  records.push({at:new Date().toISOString(),...item});$('log-count').textContent=records.length;
+  records.push({at:new Date().toISOString(),scoring:'line-clears-only-v1',...item});$('log-count').textContent=records.length;
   if(records.length===1)$('logs').replaceChildren();
   const row=document.createElement('details');row.className='log';const summary=document.createElement('summary');
   summary.textContent=`${String(records.length).padStart(3,'0')} · ${item.source} · ${labels[item.action]||item.action||'请求失败'}${item.discarded?' · 已丢弃':item.error?' · 失败':item.executed===false?' · 仅观察':''}${item.config?' · '+item.config.format:''}`;
@@ -153,9 +158,9 @@ $('manual-mode').addEventListener('click',()=>setMode('manual'));$('jev-mode').a
 $('pause').addEventListener('click',()=>human(game.paused?'resume':'pause'));$('restart').addEventListener('click',()=>human('restart'));
 $('new-seed').addEventListener('click',()=>{stop();const old=currentDecision();const gameBefore=structuredClone(game);game=createGame($('seed').value||'42');revision++;record({source:'Human',action:'restart',...old,gameBefore,gameAfter:structuredClone(game),executed:true,result:currentDecision().state,newSeed:game.seed});render();status('新对局已开始',`种子 ${game.seed}。相同种子与相同动作序列可重现对局。`);});
 $('realtime').addEventListener('change',()=>{stop();status($('realtime').checked?'自动时钟运行中':'逐拍模式','手动游玩使用同一套引擎。Jev 接手时会关闭自动时钟。');});
-for(const id of ['state-format','action-filter','choice-mode','include-metrics','observe-only','excluded-actions','state-sections'])$(id).addEventListener('change',()=>{
+for(const id of ['state-format','action-filter','choice-mode','lookahead-depth','include-metrics','observe-only','excluded-actions','state-sections'])$(id).addEventListener('change',()=>{
   stop();$('realtime').checked=false;
-  experiment=normalizeConfig({format:$('state-format').value,choiceMode:$('choice-mode').value,legalOnly:$('action-filter').value==='legal',includeMetrics:$('include-metrics').checked,sections:Object.fromEntries([...$('state-sections').querySelectorAll('input')].map(input=>[input.value,input.checked])),excludedActions:[...$('excluded-actions').querySelectorAll('input:checked')].map(input=>input.value)});
+  experiment=normalizeConfig({format:$('state-format').value,choiceMode:$('choice-mode').value,lookaheadDepth:Number($('lookahead-depth').value),legalOnly:$('action-filter').value==='legal',includeMetrics:$('include-metrics').checked,sections:Object.fromEntries([...$('state-sections').querySelectorAll('input')].map(input=>[input.value,input.checked])),excludedActions:[...$('excluded-actions').querySelectorAll('input:checked')].map(input=>input.value)});
   try {localStorage.setItem('jev-tetris-experiment',JSON.stringify(experiment));} catch {}
   clearDistribution();render();status('实验配置已更新','棋盘保持不变；下一次请求使用新配置。正在等待的旧决策将被丢弃。');
 });
@@ -171,7 +176,7 @@ document.addEventListener('keydown',event=>{
 for(const tab of ['state','log'])$(tab+'-tab').addEventListener('click',()=>{for(const other of ['state','log']){$(other+'-tab').setAttribute('aria-selected',String(other===tab));$(other+'-panel').hidden=other!==tab;}});
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(stateText(currentDecision().state));$('copy').textContent='已复制';setTimeout(()=>$('copy').textContent='复制',1200);}catch{status('复制不可用','请在 STATE 面板中选中文本复制。');}});
 $('export').addEventListener('click',()=>{
-  const payload={format:'jev-tetris-v2',exportedAt:new Date().toISOString(),seed:game.seed,actions:ACTIONS,question:$('question').value,model:$('model').value,decisions,config:experiment,observeOnly:$('observe-only').checked,finalState:currentDecision().state,finalGame:game,records};
+  const payload={format:'jev-tetris-v3',scoring:'line-clears-only-v1',exportedAt:new Date().toISOString(),seed:game.seed,actions:ACTIONS,question:$('question').value,model:$('model').value,decisions,config:experiment,observeOnly:$('observe-only').checked,finalState:currentDecision().state,finalGame:game,records};
   const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`jev-tetris-${new Date().toISOString().replaceAll(':','-')}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
 render();

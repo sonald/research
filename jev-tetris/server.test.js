@@ -217,13 +217,81 @@ test('outcome objects are actual SDK criteria and independent of state paragraph
   const result=await response.json();
   const criteria=wire.questions.next_action.criteria;
   assert.equal(typeof criteria.left,'object');
-  assert.equal(criteria.left.active_after.x,body.game.active.x-1);
-  assert.equal(criteria.left.score_after,0);
-  assert.equal(criteria.left.newly_cleared_lines,0);
-  assert.equal(criteria.left.spawned_new_piece,false);
+  assert.deepEqual(criteria.left.immediate_gain,{score:0,cleared_lines:0,game_over:false});
+  assert.equal(criteria.left.expected_gain.score,0);
+  assert.equal(criteria.left.expected_gain.cleared_lines,0);
+  assert.equal(typeof criteria.left.expected_gain.holes_delta,'number');
+  assert.deepEqual(criteria.left.followup,['hard_drop']);
   assert.ok(!Object.hasOwn(criteria,'hard_drop'));
   assert.ok(!Object.hasOwn(wire.state,'actions'));
   assert.deepEqual(result.actions,criteria);
   assert.equal(result.config.choiceMode,'outcome');
   assert.equal((await post(base,{...body,config:{choiceMode:'unknown'}})).status,400);
+});
+
+
+test('bounded lookahead reaches SDK but does not change first-action choice contract',async t=>{
+  let seen;
+  const base=await serve(t,{apiKey:'test',client:{async systemOne(request){seen=request;return {answers:{next_action:{choice:'left'}}};}}});
+  const config={format:'json_object',choiceMode:'outcome',lookaheadDepth:2,sections:{actions:false}};
+  const response=await post(base,{...body,config});assert.equal(response.status,200);
+  const result=await response.json();
+  assert.equal(result.answer.choice,'left');assert.equal(result.config.lookaheadDepth,2);
+  assert.ok(seen.questions.next_action.criteria.left.expected_gain);
+  assert.ok(Array.isArray(seen.questions.next_action.criteria.left.followup));
+  assert.deepEqual(result.actions,seen.questions.next_action.criteria);
+  for(const lookaheadDepth of [-1,3,1.5,'2',null])assert.equal((await post(base,{...body,config:{...config,lookaheadDepth}})).status,400);
+});
+
+test('row placement choices roundtrip through SDK as macro actions, never execute forecasts',async t=>{
+  let wire;
+  const client=new TypeSafeClient({apiKey:'test',baseURL:'https://api.typesafe.ai',retry:{maxRetries:0},logLevel:'off',async fetch(url,options){
+    wire=JSON.parse(options.body);return Response.json({answers:{next_action:{type:'choice',choice:'left_2',probabilities:{left_2:1},confidence:1}},model:'test'});
+  }});
+  const base=await serve(t,{apiKey:'test',client});
+  const config={format:'json_object',choiceMode:'row_placements',sections:{actions:false}};
+  const response=await post(base,{...body,config});assert.equal(response.status,200);
+  const result=await response.json();
+  assert.equal(result.answer.choice,'left_2');
+  assert.deepEqual(result.actions,wire.questions.next_action.criteria);
+  const choice=result.actions.left_2;
+  assert.deepEqual(choice.immediate_gain,{score:0,cleared_lines:0,game_over:false});
+  assert.equal(choice.expected_gain.score,0);
+  assert.ok(choice.followup.includes('hard_drop'));
+  const excluded=await post(base,{...body,config:{...config,excludedActions:['left']}});
+  assert.equal(excluded.status,502);
+  assert.ok(!Object.keys(wire.questions.next_action.criteria).some(a=>a==='left'||a.startsWith('left_')));
+  const macroGame=structuredClone(body.game);macroGame.history=['left_2'];
+  assert.equal((await post(base,{...body,game:macroGame,config})).status,200);
+});
+
+
+test('compact expected gains reach the raw SDK wire without detailed simulation fields',async t=>{
+  let wire;
+  const client=new TypeSafeClient({apiKey:'test',retry:{maxRetries:0},logLevel:'off',async fetch(url,options){
+    wire=JSON.parse(options.body);
+    return Response.json({answers:{next_action:{type:'choice',choice:'left',probabilities:{left:1},confidence:1}},model:'test'});
+  }});
+  const base=await serve(t,{apiKey:'test',client});
+  const game=createGame('compact-gap');game.active={type:'O',x:0,y:0,rotation:0};game.canHold=false;
+  for(const y of [18,19])game.board[y]=['.','.',...Array(8).fill('J')];
+  const forbidden=new Set(['board_after','landing_cells','active_after','variants','immediate_after','assumption']);
+  const check=value=>{
+    if(value&&typeof value==='object')for(const [key,child] of Object.entries(value)){
+      assert.ok(!forbidden.has(key),`unexpected detailed field: ${key}`);check(child);
+    }
+  };
+  for(const choiceMode of ['outcome','row_placements'])for(const lookaheadDepth of [0,2]){
+    const config={format:'json_object',choiceMode,lookaheadDepth,excludedActions:['hard_drop','rotate_cw'],sections:{actions:true}};
+    const response=await post(base,{...body,game,config});assert.equal(response.status,200);
+    const result=await response.json();
+    const criteria=wire.questions.next_action.criteria;
+    check(criteria);check(wire.state.actions);
+    assert.deepEqual(criteria.left.immediate_gain,{score:0,cleared_lines:0,game_over:false});
+    assert.deepEqual(criteria.left.expected_gain,{score:300,cleared_lines:2,holes_delta:0,height_delta:-2,surface_roughness:0,game_over:false});
+    assert.deepEqual(criteria.left.followup,['hard_drop']);
+    assert.equal(criteria.hard_drop,undefined);assert.equal(criteria.rotate_cw,undefined);
+    assert.deepEqual(result.actions,criteria);assert.deepEqual(wire.state.actions,criteria);
+    assert.deepEqual(Object.keys(criteria.left).sort(),['expected_gain','followup','immediate_gain']);
+  }
 });
