@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTIONS, cells, createGame, legalActions, step, encodeState } from './engine.js';
+import { ACTIONS, boardMetrics, cells, createGame, legalActions, step, encodeState } from './engine.js';
 import { STATE_SECTION_LABELS, DEFAULT_CONFIG, normalizeConfig, buildDecision, evaluateActions, validateGame } from './experiment.js';
 
 test('legal actions exclude blocked input before gravity and retain wall kicks', () => {
@@ -37,7 +37,7 @@ test('configuration rejects ambiguous values and unknown fields', () => {
 test('formats preserve board and common facts without exposing hidden random state', () => {
   const g=createGame('formats'); g.board[19][0]='J';
   const original=encodeState(g);
-  assert.equal(buildDecision(g,{legalOnly:false}).state,original);
+  assert.equal(buildDecision(g,{legalOnly:false,sections:{decision_guide:false}}).state,original);
   const decisions=['original','grid','coordinates','json'].map(format=>buildDecision(g,{format}));
   for (const format of ['original','grid','coordinates','json']) assert.equal(buildDecision(validateGame(g),{format}).state,buildDecision(g,{format}).state);
   const json=JSON.parse(decisions[3].state);
@@ -109,7 +109,7 @@ test('each optional section can be removed independently in every encoding', () 
   const markers = {
     goal: 'TETRIS STATE. Goal:', active: 'Active:', landing: 'landing_cells=',
     next: 'Next (first plays next):', stats: 'Score:', status: 'tick=', timing: 'Timing:',
-    rules: 'Rules:', shapes: 'Spawn matrices', history: 'Recent actions', actions: 'Available actions:',
+    decision_guide: 'Decision guide:', rules: 'Rules:', shapes: 'Spawn matrices', history: 'Recent actions', actions: 'Available actions:',
   };
   for (const format of ['original', 'grid', 'coordinates', 'json']) {
     const baseline = buildDecision(g, {format});
@@ -324,7 +324,9 @@ test('row-placement mode is independent and validates macro history/exclusions',
   for(const format of ['original','grid','coordinates','json','json_object']){
     const d=buildDecision(game,{format,choiceMode:'row_placements',excludedActions:['right_2']});
     assert.ok(d.actions.left_2);assert.equal(d.actions.right_2,undefined);
-    assert.deepEqual(d.actions.left_2.immediate_gain,{score:0,cleared_lines:0,game_over:false});
+    const {summary,...gain}=d.actions.left_2.immediate_gain;
+    assert.deepEqual(gain,{score:0,cleared_lines:0,game_over:false});
+    assert.equal(typeof summary,'string'); assert.ok(summary.length > 0);
     if(format==='json_object')assert.deepEqual(d.state.actions,d.actions);
     else if(format==='json')assert.deepEqual(JSON.parse(d.state).available_actions,d.actions);
     else assert.ok(!d.state.includes('[object Object]'));
@@ -332,4 +334,90 @@ test('row-placement mode is independent and validates macro history/exclusions',
     assert.ok(hidden.actions.left_2);
   }
   assert.ok(!Object.hasOwn(buildDecision(game).actions,'left_2'));
+});
+
+
+test('decision guide explains gain semantics in every encoding and has an independent switch', () => {
+  const game=createGame('guide');
+  for(const format of ['original','grid','coordinates','json','json_object']) {
+    const config={format,choiceMode:'outcome',sections:{rules:false,actions:false}};
+    const state=buildDecision(game,config).state;
+    const guide=format==='json_object' ? state.decision_guide :
+      format==='json' ? JSON.parse(state).context.find(text=>text.startsWith('Decision guide:')) :
+      state;
+    assert.ok(guide.includes('Decision guide:'));
+    assert.equal(typeof guide,'string');
+    for(const term of ['immediate_gain','expected_gains','holes_delta','height_delta','surface_roughness','game_over']) assert.ok(guide.includes(term), `${format}: ${term}`);
+    assert.match(guide,/mutually exclusive/);
+    assert.match(guide,/Do NOT sum outcomes/);
+    assert.match(guide,/at least one favorable feasible outcome/);
+    assert.match(guide,/rather than averaging/);
+    assert.match(guide,/Fewer holes is a benefit even with zero score/);
+    assert.match(guide,/scenario identifies the condition, not an instruction/);
+    assert.match(guide,/Other preview modes keep their existing evaluation horizon/);
+    assert.match(guide,/Do not assume the favorable outcome is automatic/);
+    const hidden=buildDecision(game,{...config,sections:{...config.sections,decision_guide:false}});
+    assert.equal(JSON.stringify(hidden.state).includes('Decision guide:'),false);
+    assert.deepEqual(hidden.actions,buildDecision(game,config).actions);
+  }
+});
+
+
+test('compact row choices preserve every distinct rotation outcome in source order', () => {
+  const game=createGame('plural-gains'); game.active={type:'L',x:3,y:4,rotation:0};
+  game.board[19][8]='J'; game.board[18][8]='J'; game.board[19][9]='J';
+  const before=structuredClone(game), baseline=boardMetrics(game.board);
+  const config={choiceMode:'row_placements',format:'json_object'};
+  const raw=evaluateActions(game,config), compact=buildDecision(game,config).actions;
+  assert.ok(raw.right_2.variants.length > 1);
+  for(const [action,choice] of Object.entries(raw)) {
+    const gains=compact[action].expected_gains;
+    assert.equal(gains.length,choice.variants.length, action);
+    assert.equal(new Set(gains.map(gain=>gain.scenario)).size,gains.length, action);
+    for(const [index,variant] of choice.variants.entries()) {
+      const {summary,scenario,...numbers}=gains[index];
+      assert.deepEqual(numbers,{
+        score:variant.score_delta,cleared_lines:variant.newly_cleared_lines,
+        holes_delta:variant.holes-baseline.holes,height_delta:variant.max_height-baseline.maxHeight,
+        surface_roughness:variant.bumpiness,game_over:variant.game_over,
+      },`${action}: variant ${index}`);
+      assert.equal(typeof summary,'string'); assert.ok(summary.length > 0);
+      assert.equal(scenario,variant.actual_first_beat?'Immediate result':`After ${variant.rotation_action ? `${variant.rotation_action} and ` : ''}hard_drop`);
+    }
+    assert.deepEqual(Object.keys(compact[action]).sort(),['expected_gains','immediate_gain']);
+  }
+  // Alternative tradeoffs must survive compaction even when they lose the old ranking.
+  assert.ok(new Set(compact.right_2.expected_gains.map(({scenario,summary,...values})=>JSON.stringify(values))).size > 1);
+  assert.deepEqual(game,before);
+});
+
+test('compact gains retain reduced holes even when no points or rows are earned', () => {
+  const game=createGame('under-roof'); game.active={type:'O',x:0,y:18,rotation:0};
+  game.board[17][3]='J'; game.board[17][4]='J';
+  const choice=buildDecision(game,{choiceMode:'row_placements'}).actions.right_2;
+  const gain=choice.expected_gains.find(value=>value.holes_delta < 0);
+  assert.ok(gain);
+  assert.equal(gain.score,0); assert.equal(gain.cleared_lines,0); assert.equal(gain.holes_delta,-4);
+  assert.match(gain.summary,/Holes decrease by 4/);
+  assert.equal(choice.immediate_gain.score,0);
+  assert.equal(game.pieces,0);
+});
+
+test('outcome and terminal controls retain one result without invented rotation alternatives', () => {
+  const game=createGame('one-result'); game.active={type:'L',x:3,y:4,rotation:0};
+  for(const lookaheadDepth of [0,2]) {
+    const config={choiceMode:'outcome',lookaheadDepth};
+    const raw=evaluateActions(game,config), compact=buildDecision(game,config).actions;
+    for(const [action,value] of Object.entries(compact)) {
+      assert.equal(value.expected_gains.length,1,action);
+      const preview=raw[action].lookahead_preview ?? raw[action].landing_preview;
+      assert.equal(value.expected_gains[0].score,raw[action].score_delta+(preview?.additional_score??0));
+      assert.equal(value.expected_gains[0].cleared_lines,raw[action].newly_cleared_lines+(preview?.additional_cleared_lines??0));
+    }
+  }
+  game.paused=true;
+  for(const choice of Object.values(buildDecision(game,{choiceMode:'row_placements'}).actions)) {
+    assert.equal(choice.expected_gains.length,1);
+    assert.equal(choice.expected_gains[0].scenario,'Immediate result');
+  }
 });

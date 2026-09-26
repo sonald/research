@@ -1,13 +1,14 @@
 import { ACTIONS, ALL_ACTIONS, boardMetrics as metrics, cells, stateSections, legalActions, step, ghostCells } from './engine.js';
 import { buildRowChoices } from './row-choices.js';
+import { searchPlacements } from './placement-search.js';
 
 export const STATE_SECTION_LABELS = Object.freeze({
-  goal: '目标 Goal', active: '当前方块 Active', landing: '落点 Landing', next: '预告与暂存 Next / Hold',
+  decision_guide: '决策与收益说明 Decision guide', current_target: '当前目标 Current target', goal: '目标 Goal', active: '当前方块 Active', landing: '落点 Landing', next: '预告与暂存 Next / Hold',
   stats: '得分与消行 Score', status: '游戏状态 Status', timing: '计时 Timing', rules: '规则 Rules',
   shapes: '方块形状 Spawn matrices', history: '近期动作 Recent actions', actions: '动作说明 Available actions',
 });
 
-export const DEFAULT_CONFIG = Object.freeze({format: 'original', choiceMode: 'description', lookaheadDepth: 0, legalOnly: true, includeMetrics: false, excludedActions: Object.freeze([]), sections: Object.freeze(Object.fromEntries(Object.keys(STATE_SECTION_LABELS).map(key => [key, true])))});
+export const DEFAULT_CONFIG = Object.freeze({format: 'original', choiceMode: 'description', lookaheadDepth: 0, search: Object.freeze({maxStates:5000,maxPathLength:64,maxChoices:20}), legalOnly: true, includeMetrics: false, excludedActions: Object.freeze([]), sections: Object.freeze(Object.fromEntries(Object.keys(STATE_SECTION_LABELS).map(key => [key, true])))});
 const FORMATS = ['original', 'grid', 'coordinates', 'json', 'json_object'];
 const TYPES = 'IOTJLSZ';
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -17,12 +18,15 @@ const integer = (value, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isSafe
 export function normalizeConfig(config = {}) {
   if (!record(config) || Object.keys(config).some(key => !Object.hasOwn(DEFAULT_CONFIG, key))) throw new Error('Invalid experiment config');
   const result = {...DEFAULT_CONFIG, ...config};
-  if (!FORMATS.includes(result.format) || !['description', 'outcome', 'row_placements'].includes(result.choiceMode) || typeof result.legalOnly !== 'boolean' || typeof result.includeMetrics !== 'boolean') throw new Error('Invalid experiment config');
+  if (!FORMATS.includes(result.format) || !['description', 'outcome', 'row_placements', 'reachable_placements'].includes(result.choiceMode) || typeof result.legalOnly !== 'boolean' || typeof result.includeMetrics !== 'boolean') throw new Error('Invalid experiment config');
   if (!integer(result.lookaheadDepth, 0, 2)) throw new Error('Invalid lookahead depth');
   if (!Array.isArray(result.excludedActions) || result.excludedActions.length > Object.keys(ALL_ACTIONS).length || result.excludedActions.some(action => typeof action !== 'string' || !Object.hasOwn(ALL_ACTIONS, action))) throw new Error('Invalid excluded actions');
   result.excludedActions = Object.keys(ALL_ACTIONS).filter(action => result.excludedActions.includes(action));
   if (!record(result.sections) || Object.entries(result.sections).some(([key, value]) => !Object.hasOwn(STATE_SECTION_LABELS, key) || typeof value !== 'boolean')) throw new Error('Invalid state sections');
   result.sections = {...DEFAULT_CONFIG.sections, ...result.sections};
+  if (!record(result.search) || Object.keys(result.search).some(key=>!Object.hasOwn(DEFAULT_CONFIG.search,key))) throw new Error('Invalid search settings');
+  result.search={...DEFAULT_CONFIG.search,...result.search};
+  if(!integer(result.search.maxStates,1,10000)||!integer(result.search.maxPathLength,1,128)||!integer(result.search.maxChoices,1,20))throw new Error('Invalid search budget');
   return result;
 }
 
@@ -155,38 +159,62 @@ function summarizeAction(game, beforeBoard, value) {
   const immediate = isRow
     ? {score:value.immediate_after.score-game.score, cleared_lines:Math.max(0,value.immediate_after.cleared_lines-game.lines), game_over:value.immediate_after.game_over}
     : {score:value.score_delta, cleared_lines:value.newly_cleared_lines, game_over:value.game_over_after};
-  let score=immediate.score, cleared=immediate.cleared_lines, quality=beforeBoard, over=immediate.game_over, followup=[];
-  if (isRow) {
-    const best=value.variants?.[value.best_variant_index];
-    if (best) {
-      score=best.score_delta;cleared=best.newly_cleared_lines;over=best.game_over;
-      quality={holes:best.holes,maxHeight:best.max_height,bumpiness:best.bumpiness};
-      if (!best.actual_first_beat) followup=[...(best.rotation_action?[best.rotation_action]:[]),'hard_drop'];
-    } else {
-      quality=metrics(step(structuredClone(game),value.execute_now).board);
-    }
+  const change = (amount, up, down, same) => amount > 0 ? `${up} ${amount}` : amount < 0 ? `${down} ${-amount}` : same;
+  const points = amount => change(amount,'gain','lose','no change in');
+  immediate.summary = `This action clears ${immediate.cleared_lines} rows; ${points(immediate.score)} points. ${immediate.game_over?'The game ends.':'The game does not end immediately.'}`;
+  const gain = (score, cleared, quality, over, scenario, conditional) => {
+    const result={scenario,score,cleared_lines:cleared,holes_delta:quality.holes-beforeBoard.holes,height_delta:quality.maxHeight-beforeBoard.maxHeight,surface_roughness:quality.bumpiness,game_over:over};
+    const surface=quality.bumpiness<=4?'flat':quality.bumpiness<=9?'slightly uneven':quality.bumpiness<=16?'bumpy':'very jagged';
+    result.summary = `${conditional?'Conditional possibility, not immediate:':'Result after this action:'} ${cleared} rows cleared; ${points(score)} points. ${change(result.holes_delta,'Holes increase by','Holes decrease by','Hole count is unchanged')}. ${change(result.height_delta,'Stack grows by','Stack lowers by','Stack height is unchanged')}${result.height_delta?' rows':''}. Surface is ${surface}. ${over?'Game ends in this result.':'No game over in this result.'}`;
+    return result;
+  };
+  let expected;
+  if (isRow && value.variants?.length) {
+    expected=value.variants.map(v=>gain(v.score_delta,v.newly_cleared_lines,
+      {holes:v.holes,maxHeight:v.max_height,bumpiness:v.bumpiness},v.game_over,
+      v.actual_first_beat?'Immediate result':v.rotation_action?`After ${v.rotation_action} and hard_drop`:'After hard_drop',!v.actual_first_beat));
   } else {
-    quality=value.board_after;
-    const preview=value.lookahead_preview ?? value.landing_preview;
+    let score=immediate.score, cleared=immediate.cleared_lines, over=immediate.game_over;
+    let quality=isRow?metrics(step(structuredClone(game),value.execute_now).board):value.board_after;
+    const preview=isRow?null:value.lookahead_preview ?? value.landing_preview;
     if (preview?.board_after) {
       score+=preview.additional_score;cleared+=preview.additional_cleared_lines;
       quality=preview.board_after;over=preview.game_over;
-      followup=[...(preview.followup_actions??[]),...(preview.requires_additional_hard_drop?['hard_drop']:[])];
     }
+    const conditional=Boolean(preview?.board_after);
+    expected=[gain(score,cleared,quality,over,conditional?'After the conditional placement preview':'Immediate result',conditional)];
   }
-  return {
-    immediate_gain:immediate,
-    expected_gain:{score,cleared_lines:cleared,holes_delta:quality.holes-beforeBoard.holes,height_delta:quality.maxHeight-beforeBoard.maxHeight,surface_roughness:quality.bumpiness,game_over:over},
-    followup,
-  };
+  return {immediate_gain:immediate,expected_gains:expected};
 }
 
-export function buildDecision(game, config) {
+export function buildDecision(game, config, currentPlan = null) {
   config=normalizeConfig(config);
   const beforeBoard=metrics(game.board);
-  const actions=Object.fromEntries(Object.entries(evaluateActions(game,config)).map(([action,value])=>
+  const placement=config.choiceMode==='reachable_placements'?searchPlacements(game,{...config.search,excludedActions:config.excludedActions},currentPlan):null;
+  const actions=placement?placement.actions:Object.fromEntries(Object.entries(evaluateActions(game,config)).map(([action,value])=>
     [action, typeof value==='string'?value:summarizeAction(game,beforeBoard,value)]));
-  const sections = stateSections(game);
+  const sections = {
+    decision_guide: [
+      'Decision guide: The goal is to clear rows and keep playing. Only line clears earn points; movement and dropping alone earn none. Each Choice key is the only action executed now. left_N/right_N moves N columns in one beat. Avoid pause/restart while actively playing.',
+      'immediate_gain describes the result of this one action. score is the change in points, not total score; cleared_lines is the number of newly cleared rows, not the accumulated count; game_over=true means this action ends the game. No immediate gain can still be useful preparation for a later placement.',
+      `Current evaluation mode: ${config.choiceMode}${config.choiceMode==='outcome'?`, additional lookahead depth=${config.lookaheadDepth}`:''}.`,
+      'expected_gains is a list of mutually exclusive possible outcomes, NOT a sequence to execute or add together. In same-row mode it contains EVERY distinct feasible optional-rotation-then-hard-drop outcome for this action, with no best-only filtering. scenario identifies the condition, not an instruction. Other preview modes keep their existing evaluation horizon. Each outcome is conditional, not guaranteed; its changes are relative to the current state BEFORE this action and already include immediate_gain. Do NOT sum outcomes or add immediate_gain again.',
+      'For each expected_gains entry: prefer more cleared_lines and score; holes_delta<0 means fewer covered empty cells (better), >0 means more holes (worse), 0 means unchanged, NOT necessarily hole-free. height_delta<0 lowers the highest stack (usually better), >0 raises it. surface_roughness is the final sum of adjacent column-height differences, NOT a change; smaller is flatter. Labels: 0-4 flat, 5-9 slightly uneven, 10-16 bumpy, 17+ very jagged. game_over=true is a losing result.',
+      'Select a current action that offers at least one favorable feasible outcome, rather than averaging its good and bad rotation alternatives. Fewer holes is a benefit even with zero score and no line clear; lower height and a flatter surface are also useful. Compare those opportunities with other actions while respecting immediate game-over risk. Do not assume the favorable outcome is automatic. Only the current action runs; the next decision is recalculated with no committed plan. Preview hard drops may remain hypothetical when excluded.',
+    ].join('\n'),
+    ...stateSections(game),
+  };
+  if (placement) {
+    sections.decision_guide = [
+      'Decision guide: Each Choice is one distinct placement of the CURRENT piece, found with bounded search and independently replay-verified against the real engine. Choose a placement ID. Only its execute_now action runs this turn, NOT the whole path. Hold is outside this search.',
+      'The summary describes the completed placement, not the immediate action: score gain, newly cleared rows, holes before->after, maximum height before->after, roughness before->after and survival. Fewer holes is useful even with no line clear; prefer survival, clears, a lower stack and flatter surface. Only cleared rows earn points.',
+      'steps_to_lock is the number of remaining engine inputs, including the final lock. left_N/right_N is ONE beat, while N separate inputs take N beats. is_current_target marks the previous target whose remaining path has just replayed successfully. Prefer continuing a still-valid target when benefits are similar, rather than repeatedly switching.',
+      'Search is bounded and may be incomplete. Candidates are shortlisted after verification, preserving line/holes/height/roughness representatives and a valid current target, then using a heuristic to fill at most 20 options. The shortlist is not proof of globally optimal play. All outcomes terminating the game are omitted when surviving outcomes were found.',
+      `Search coverage: ${placement.diagnostics.search_complete?'complete for the configured action set':'INCOMPLETE'}; truncated_by=${JSON.stringify(placement.diagnostics.truncated_by)}.`,
+    ].join('\n');
+    const target=Object.entries(placement.actions).find(([,choice])=>choice.is_current_target);
+    sections.current_target=target?`Current target: ${target[0]}; remaining steps=${target[1].steps_to_lock}; replay verified=true. Prefer retaining it when benefits are similar.`:'Current target: none (or previous plan invalidated).';
+  }
   sections.actions = 'Available actions: ' + Object.entries(actions).map(([id, description]) => `${id}: ${typeof description === 'string' ? description : JSON.stringify(description)}`).join('; ');
   const visible = game.board.map(row => [...row]);
   for (const {x,y,type} of cells(game)) if (y >= 0 && y < 20 && x >= 0 && x < 10) visible[y][x] = type.toLowerCase();
@@ -207,5 +235,5 @@ export function buildDecision(game, config) {
     if (features) parts.push('Board metrics: ' + JSON.stringify(features));
     state = parts.join('\n');
   }
-  return {state, actions, config};
+  return {state, actions, config, ...(placement?{search:placement.diagnostics,plans:placement.plans,placements:placement.candidates.filter(candidate=>Object.hasOwn(actions,candidate.id))}:{})};
 }

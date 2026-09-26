@@ -5,9 +5,11 @@ import { resolve } from 'node:path';
 import { TypeSafeClient, choice } from '@typesafe-ai/sdk';
 import { ALL_ACTIONS as ACTIONS } from './engine.js';
 import { DEFAULT_CONFIG, buildDecision, validateGame } from './experiment.js';
+import { stateVersion, validatePlan } from './placement-plan.js';
 
-export const DEFAULT_QUESTION = 'Which single action should the player take next to clear rows and survive? Only cleared rows earn points. Prefer fewer holes, a low stack and a flat surface. Each Choice key is the action to execute now. If provided, immediate_gain is its actual change; expected_gain is the total gain after the additional followup actions, selected as the best available preview. An empty followup means no additional action is needed. Forecasts are conditional, not guaranteed, and followup actions are NOT automatically executed; a forecast hard_drop remains hypothetical if excluded from actual choices. Avoid pausing or restarting an active game.';
-const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/engine.js': ['engine.js', 'text/javascript'], '/experiment.js': ['experiment.js', 'text/javascript'], '/row-choices.js': ['row-choices.js','text/javascript'] };
+export const DEFAULT_QUESTION = 'Which action should the player take next?';
+export const PLACEMENT_QUESTION = 'Which placement should the player choose?';
+const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/engine.js': ['engine.js', 'text/javascript'], '/experiment.js': ['experiment.js', 'text/javascript'], '/row-choices.js': ['row-choices.js','text/javascript'], '/placement-search.js':['placement-search.js','text/javascript'], '/placement-plan.js':['placement-plan.js','text/javascript'] };
 
 export function createServer({ apiKey = process.env.TYPESAFE_API_KEY, model = process.env.TYPESAFE_DEFAULT_MODEL || 'jev-latest', client, maxRequests = 120 } = {}) {
   let inFlight = false;
@@ -28,7 +30,7 @@ export function createServer({ apiKey = process.env.TYPESAFE_API_KEY, model = pr
       if (!['localhost', '127.0.0.1', '[::1]'].includes(hostname)) throw new Error();
     } catch { fail(403, 'Only localhost hosts are allowed.'); return; }
     if (req.method === 'GET' && pathname === '/api/config') {
-      json(200, { configured, model, question: DEFAULT_QUESTION, actions: ACTIONS, experiment: DEFAULT_CONFIG });
+      json(200, { configured, model, question: DEFAULT_QUESTION, placementQuestion: PLACEMENT_QUESTION, actions: ACTIONS, experiment: DEFAULT_CONFIG });
       return;
     }
     if (req.method === 'GET' && Object.hasOwn(files, pathname)) {
@@ -66,22 +68,28 @@ export function createServer({ apiKey = process.env.TYPESAFE_API_KEY, model = pr
       let body;
       try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { fail(400, 'Invalid JSON body.'); return; }
-      const { game, config, question, model: requestedModel } = body || {};
+      const { game, config, question, model: requestedModel, current_plan, state_version } = body || {};
       if (typeof question !== 'string' || !question.trim() || question.length > 4_000 || typeof requestedModel !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,99}$/.test(requestedModel)) {
         fail(400, 'Provide question (1–4000 characters) and a valid model name (1–100 characters).'); return;
       }
-      let decision;
-      try { decision = buildDecision(validateGame(game), config); }
+      let decision, snapshot;
+      try {
+        snapshot=validateGame(game);
+        if(config?.choiceMode==='reachable_placements' && state_version!==stateVersion(snapshot)) { fail(409,'State version does not match the submitted snapshot.'); return; }
+        decision = buildDecision(snapshot, config, current_plan);
+      }
       catch { fail(400, 'Invalid game snapshot or experiment configuration.'); return; }
       const { state, actions } = decision;
-      if (!Object.keys(actions).length) { fail(422, 'No candidate actions remain. Enable at least one action available in this state.'); return; }
+      if (!Object.keys(actions).length) { json(422, {error:decision.search?'No replay-verified placement was found within the search budget and action restrictions.':'No candidate actions remain. Enable at least one action available in this state.',search:decision.search}); return; }
       if ((typeof state === 'string' ? state : JSON.stringify(state)).length > 48_000) { fail(400, 'Encoded state is too large.'); return; }
       requests++;
       const started = performance.now();
       const response = await sdk.systemOne({ state, questions: { next_action: choice(question, actions) }, model: requestedModel });
       const answer = response.answers?.next_action;
       if (!answer || !Object.hasOwn(actions, answer.choice)) { fail(502, 'Jev returned an invalid action.'); return; }
-      json(200, { answer, model: response.model, usage: response.usage, latencyMs: Math.round(performance.now() - started), question, state, actions, config: decision.config });
+      const plan=decision.plans?.[answer.choice];
+      if(decision.search && (!plan || !validatePlan(snapshot,plan,{...decision.config.search,excludedActions:decision.config.excludedActions}).ok)) { fail(502,'Selected placement plan failed replay validation.'); return; }
+      json(200, { choice_id:answer.choice, execute_now:plan?plan.remainingPath[0]:answer.choice, state_version:stateVersion(snapshot), ...(plan?{plan,search:decision.search,placement_details:decision.placements}:{}), answer, model: response.model, usage: response.usage, latencyMs: Math.round(performance.now() - started), question, state, actions, config: decision.config });
     } catch (error) {
       const status = error?.status ?? error?.statusCode;
       if (status === 401 || status === 403) fail(502, 'TypeSafe rejected the server API key. Check TYPESAFE_API_KEY.');

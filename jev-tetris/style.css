@@ -7,3 +7,5 @@
 .state-section-options{margin-top:14px;font-size:12px;color:var(--muted)}#state-sections{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}#state-sections label{font-size:11px;align-items:flex-start}#state-sections input{accent-color:var(--purple)}
 
 .choice-options{margin-top:12px}.choice-preview{font-size:12px;color:var(--muted);margin-top:12px}.choice-preview pre{margin:10px 0 0;max-height:280px}
+
+#search-settings{margin-top:14px}#search-settings input{display:block;width:100%;margin-top:5px}#target-status{color:var(--purple)}.probability>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

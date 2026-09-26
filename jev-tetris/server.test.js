@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TypeSafeClient } from '@typesafe-ai/sdk';
-import { createServer } from './server.js';
+import { createServer, DEFAULT_QUESTION } from './server.js';
 import { ACTIONS, createGame, stateSections } from './engine.js';
-import { buildDecision, normalizeConfig } from './experiment.js';
+import { buildDecision, evaluateActions, normalizeConfig } from './experiment.js';
 
 async function serve(t, options) {
   const server = createServer(options);
@@ -11,6 +11,12 @@ async function serve(t, options) {
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
   return `http://127.0.0.1:${server.address().port}`;
 }
+function assertGain(value, expected) {
+  const {summary,scenario,...numbers}=value;
+  assert.deepEqual(numbers,expected);
+  assert.equal(typeof summary,'string'); assert.ok(summary.length > 0);
+}
+
 const body = { game: createGame('42'), config: { format:'original', legalOnly:true, includeMetrics:false }, question: 'What action next?', model: 'jev-latest' };
 const expected = buildDecision(body.game,body.config);
 const post = (base, value = body, headers = {}) => fetch(`${base}/api/decide`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(value) });
@@ -217,11 +223,11 @@ test('outcome objects are actual SDK criteria and independent of state paragraph
   const result=await response.json();
   const criteria=wire.questions.next_action.criteria;
   assert.equal(typeof criteria.left,'object');
-  assert.deepEqual(criteria.left.immediate_gain,{score:0,cleared_lines:0,game_over:false});
-  assert.equal(criteria.left.expected_gain.score,0);
-  assert.equal(criteria.left.expected_gain.cleared_lines,0);
-  assert.equal(typeof criteria.left.expected_gain.holes_delta,'number');
-  assert.deepEqual(criteria.left.followup,['hard_drop']);
+  assertGain(criteria.left.immediate_gain,{score:0,cleared_lines:0,game_over:false});
+  assert.equal(criteria.left.expected_gains[0].score,0);
+  assert.equal(criteria.left.expected_gains[0].cleared_lines,0);
+  assert.equal(typeof criteria.left.expected_gains[0].holes_delta,'number');
+  assert.equal(Object.hasOwn(criteria.left,'followup'),false);
   assert.ok(!Object.hasOwn(criteria,'hard_drop'));
   assert.ok(!Object.hasOwn(wire.state,'actions'));
   assert.deepEqual(result.actions,criteria);
@@ -237,8 +243,8 @@ test('bounded lookahead reaches SDK but does not change first-action choice cont
   const response=await post(base,{...body,config});assert.equal(response.status,200);
   const result=await response.json();
   assert.equal(result.answer.choice,'left');assert.equal(result.config.lookaheadDepth,2);
-  assert.ok(seen.questions.next_action.criteria.left.expected_gain);
-  assert.ok(Array.isArray(seen.questions.next_action.criteria.left.followup));
+  assert.ok(seen.questions.next_action.criteria.left.expected_gains[0]);
+  assert.equal(Object.hasOwn(seen.questions.next_action.criteria.left,'followup'),false);
   assert.deepEqual(result.actions,seen.questions.next_action.criteria);
   for(const lookaheadDepth of [-1,3,1.5,'2',null])assert.equal((await post(base,{...body,config:{...config,lookaheadDepth}})).status,400);
 });
@@ -255,9 +261,18 @@ test('row placement choices roundtrip through SDK as macro actions, never execut
   assert.equal(result.answer.choice,'left_2');
   assert.deepEqual(result.actions,wire.questions.next_action.criteria);
   const choice=result.actions.left_2;
-  assert.deepEqual(choice.immediate_gain,{score:0,cleared_lines:0,game_over:false});
-  assert.equal(choice.expected_gain.score,0);
-  assert.ok(choice.followup.includes('hard_drop'));
+  assertGain(choice.immediate_gain,{score:0,cleared_lines:0,game_over:false});
+  assert.equal(choice.expected_gains[0].score,0);
+  const raw=evaluateActions(body.game,config);
+  for(const [action,value] of Object.entries(result.actions)) {
+    assert.equal(value.expected_gains.length,raw[action].variants.length, action);
+    for(const [index,gain] of value.expected_gains.entries()) {
+      assert.equal(gain.score,raw[action].variants[index].score_delta);
+      assert.equal(gain.cleared_lines,raw[action].variants[index].newly_cleared_lines);
+      assert.equal(typeof gain.scenario,'string');
+    }
+  }
+  assert.equal(Object.hasOwn(choice,'followup'),false);
   const excluded=await post(base,{...body,config:{...config,excludedActions:['left']}});
   assert.equal(excluded.status,502);
   assert.ok(!Object.keys(wire.questions.next_action.criteria).some(a=>a==='left'||a.startsWith('left_')));
@@ -275,7 +290,7 @@ test('compact expected gains reach the raw SDK wire without detailed simulation 
   const base=await serve(t,{apiKey:'test',client});
   const game=createGame('compact-gap');game.active={type:'O',x:0,y:0,rotation:0};game.canHold=false;
   for(const y of [18,19])game.board[y]=['.','.',...Array(8).fill('J')];
-  const forbidden=new Set(['board_after','landing_cells','active_after','variants','immediate_after','assumption']);
+  const forbidden=new Set(['board_after','landing_cells','active_after','variants','immediate_after','assumption','followup','followup_actions']);
   const check=value=>{
     if(value&&typeof value==='object')for(const [key,child] of Object.entries(value)){
       assert.ok(!forbidden.has(key),`unexpected detailed field: ${key}`);check(child);
@@ -287,11 +302,35 @@ test('compact expected gains reach the raw SDK wire without detailed simulation 
     const result=await response.json();
     const criteria=wire.questions.next_action.criteria;
     check(criteria);check(wire.state.actions);
-    assert.deepEqual(criteria.left.immediate_gain,{score:0,cleared_lines:0,game_over:false});
-    assert.deepEqual(criteria.left.expected_gain,{score:300,cleared_lines:2,holes_delta:0,height_delta:-2,surface_roughness:0,game_over:false});
-    assert.deepEqual(criteria.left.followup,['hard_drop']);
+    for(const [action,value] of Object.entries(criteria)) {
+      assert.ok(Array.isArray(value.expected_gains), action);
+      assert.ok(value.expected_gains.length > 0, action);
+      assert.equal(Object.hasOwn(value,'expected_gain'),false);
+      for(const gain of value.expected_gains) {
+        assert.equal(typeof gain.scenario,'string'); assert.ok(gain.scenario.length > 0);
+        assert.equal(typeof gain.summary,'string');
+      }
+    }
+    assertGain(criteria.left.immediate_gain,{score:0,cleared_lines:0,game_over:false});
+    assertGain(criteria.left.expected_gains[0],{score:300,cleared_lines:2,holes_delta:0,height_delta:-2,surface_roughness:0,game_over:false});
+    assert.equal(Object.hasOwn(criteria.left,'followup'),false);
     assert.equal(criteria.hard_drop,undefined);assert.equal(criteria.rotate_cw,undefined);
     assert.deepEqual(result.actions,criteria);assert.deepEqual(wire.state.actions,criteria);
-    assert.deepEqual(Object.keys(criteria.left).sort(),['expected_gain','followup','immediate_gain']);
+    assert.deepEqual(Object.keys(criteria.left).sort(),['expected_gains','immediate_gain']);
   }
+});
+
+
+test('default question asks only for the next action and guidance lives in state', async t => {
+  assert.equal(DEFAULT_QUESTION,'Which action should the player take next?');
+  let seen;
+  const base=await serve(t,{apiKey:'test',client:{async systemOne(request){
+    seen=request;return {answers:{next_action:{choice:'left'}}};
+  }}});
+  assert.equal((await (await fetch(`${base}/api/config`)).json()).question,DEFAULT_QUESTION);
+  const response=await post(base,{...body,question:DEFAULT_QUESTION,config:{format:'json_object',choiceMode:'outcome',sections:{actions:false}}});
+  assert.equal(response.status,200);
+  assert.equal(seen.questions.next_action.instructions,DEFAULT_QUESTION);
+  assert.match(seen.state.decision_guide,/immediate_gain/);
+  assert.match(seen.state.decision_guide,/expected_gains/);
 });
